@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DS Performance Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+/* ═══════════════════════════════════════
+   CSS VARIABLES & BASE
+   ═══════════════════════════════════════ */
+:root {
+  --bg:#FFF6D8;--card:#fff;--text:#522A10;--text2:#888;--border:rgba(82,42,16,.1);
+  --hdr:#522A10;--hdr-t:#FFE180;
+  --bud:#10507C;--fcst:#522A10;--act:#ED6961;
+  --pos:#4CAF50;--neg:#ED6961;
+}
+.theme-marro {
+  --bg:#FDF5F5;--text:#2D2D2D;--border:rgba(128,2,15,.08);
+  --hdr:#80020F;--hdr-t:#fff;
+  --bud:#80020F;--fcst:#DABFBD;--act:#C88131;
+}
+.theme-combined {
+  --bg:#F9F6F0;--text:#2D2D2D;--border:rgba(0,0,0,.06);
+  --hdr:#3A3A3A;--hdr-t:#fff;
+  --bud:#10507C;--fcst:#9BC3FE;--act:#522A10;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s}
+
+/* ═══════════════════════════════════════
+   TOP BAR
+   ═══════════════════════════════════════ */
+.top{background:var(--hdr);color:var(--hdr-t);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.top h1{font-size:15px;font-weight:700}
+.top-ctrls{display:flex;align-items:center;gap:10px}
+.top-ctrls select,.top-ctrls button{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:var(--hdr-t)}
+.top-ctrls select option{color:#333;background:#fff}
+.brand-btn{border:none!important;opacity:.65;transition:all .2s}
+.brand-btn.active{opacity:1;background:rgba(255,255,255,.25)!important}
+.refresh-btn{background:rgba(255,255,255,.2)!important;border:none!important}
+
+/* ═══════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════ */
+.tabs{display:flex;background:var(--card);border-bottom:2px solid var(--border);overflow-x:auto}
+.tab-btn{padding:11px 22px;border:none;background:0;cursor:pointer;font-size:13px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;white-space:nowrap;transition:all .2s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--bud);border-bottom-color:var(--bud)}
+
+/* ═══════════════════════════════════════
+   CONTENT
+   ═══════════════════════════════════════ */
+.content{max-width:1440px;margin:0 auto;padding:20px 24px 60px}
+.tab-page{display:none}.tab-page.active{display:block}
+.section-hdr{display:flex;align-items:center;gap:10px;margin:20px 0 12px}
+.section-hdr h2{font-size:15px;font-weight:700}
+.section-hdr .line{flex:1;height:2px;background:var(--border)}
+
+/* ═══════════════════════════════════════
+   KPI CARDS
+   ═══════════════════════════════════════ */
+.kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 2px 10px var(--border);flex:1 1 200px;min-width:180px;position:relative;overflow:hidden;transition:transform .2s}
+.kpi:hover{transform:translateY(-2px)}
+.kpi .stripe{position:absolute;top:0;left:0;right:0;height:4px}
+.kpi .icon{position:absolute;top:12px;right:14px;font-size:18px;opacity:.35}
+.kpi .label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:600;margin-bottom:4px}
+.kpi .value{font-size:24px;font-weight:800;color:var(--text)}
+.kpi .compare{font-size:11px;color:var(--text2);margin-top:4px}
+.kpi .compare b{font-weight:600}
+.kpi .var{font-size:12px;font-weight:700;margin-top:3px}
+.kpi .var.pos{color:var(--pos)}.kpi .var.neg{color:var(--neg)}
+
+/* ═══════════════════════════════════════
+   CHARTS
+   ═══════════════════════════════════════ */
+.chart-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.chart-card{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 2px 10px var(--border);flex:1 1 48%;min-width:320px}
+.chart-card.full{flex:1 1 100%}
+.chart-card h3{font-size:13px;font-weight:700;margin-bottom:10px}
+.chart-wrap{position:relative;height:280px}
+
+/* ═══════════════════════════════════════
+   TABLES
+   ═══════════════════════════════════════ */
+.tbl-wrap{background:var(--card);border-radius:10px;box-shadow:0 2px 10px var(--border);overflow:hidden;margin-bottom:16px}
+.tbl-wrap h3{padding:14px 16px 8px;font-size:13px;font-weight:700}
+.tbl-wrap .scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:var(--hdr);color:var(--hdr-t);padding:8px 12px;font-weight:600;white-space:nowrap;text-align:right;position:sticky;top:0}
+thead th:first-child{text-align:left}
+tbody td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--border)}
+tbody td:first-child{text-align:left;font-weight:600}
+tbody tr:hover{background:rgba(0,0,0,.02)}
+.pos{color:var(--pos);font-weight:600}.neg{color:var(--neg);font-weight:600}
+
+/* ═══════════════════════════════════════
+   BRAND PANELS
+   ═══════════════════════════════════════ */
+.brand-split{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.brand-col{flex:1 1 48%;min-width:300px;border-radius:10px;overflow:hidden;box-shadow:0 2px 10px var(--border)}
+.brand-col-hdr{padding:10px 16px;font-weight:700;font-size:14px}
+.brand-col-hdr.bbn{background:#FFD54D;color:#522A10}
+.brand-col-hdr.mro{background:#80020F;color:#fff}
+.brand-col-body{background:var(--card);padding:14px}
+
+/* ═══════════════════════════════════════
+   REGION CARDS
+   ═══════════════════════════════════════ */
+.region-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.region-card{background:var(--card);border-radius:10px;padding:14px 18px;text-align:center;box-shadow:0 2px 8px var(--border);min-width:130px;flex:1 1 auto;border-left:4px solid var(--bud)}
+.region-card .rname{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);letter-spacing:.5px}
+.region-card .rval{font-size:22px;font-weight:800;margin-top:3px}
+.region-card .rsub{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* ═══════════════════════════════════════
+   CONFIG PANEL
+   ═══════════════════════════════════════ */
+.config{background:var(--card);border-radius:12px;padding:30px;max-width:500px;margin:40px auto;box-shadow:0 4px 24px var(--border)}
+.config h2{margin-bottom:16px;font-size:18px}
+.config label{display:block;font-size:13px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.config input{width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:14px}
+.config input:focus{outline:none;border-color:var(--bud)}
+.config button{width:100%;padding:12px;border:none;border-radius:8px;background:var(--hdr);color:var(--hdr-t);font-weight:700;font-size:15px;cursor:pointer}
+.config .hint{font-size:11px;color:var(--text2);margin-top:-10px;margin-bottom:14px}
+
+/* ═══════════════════════════════════════
+   LOADING & RESPONSIVE
+   ═══════════════════════════════════════ */
+.loading{display:flex;align-items:center;justify-content:center;min-height:300px;flex-direction:column;gap:12px}
+.spinner{width:36px;height:36px;border:4px solid var(--border);border-top-color:var(--bud);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){.chart-row,.brand-split{flex-direction:column}.kpi-row{flex-wrap:wrap}}
+@media(max-width:600px){.kpi{min-width:100%}.tab-btn{padding:9px 14px;font-size:12px}.content{padding:12px}}
+@media print{.top,.tabs{position:relative}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ TOP BAR ═══════════════════════════════════════ -->
+<div class="top">
+  <h1 id="title">🐾 DS Performance Dashboard</h1>
+  <div class="top-ctrls">
+    <button class="brand-btn active" onclick="setBrand('butternut')">🐶 BBN</button>
+    <button class="brand-btn" onclick="setBrand('marro')">🐱 MRO</button>
+    <button class="brand-btn" onclick="setBrand('combined')">🐾 All</button>
+    <select id="selPeriod" onchange="render()"><option value="all">All Periods</option></select>
+    <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
+    <select id="selLevel" onchange="render()">
+      <option value="Region">Region</option>
+      <option value="Region Group">Region Group</option>
+      <option value="Market" selected>Market</option>
+    </select>
+    <select id="selYear" onchange="loadData()"><option value="2026">2026</option><option value="2025">2025</option></select>
+    <button class="refresh-btn" onclick="loadData()" title="Refresh data">↻</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TABS ═══════════════════════════════════════ -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="setTab('summary',this)">📊 Summary</button>
+  <button class="tab-btn" onclick="setTab('sales',this)">📈 Sales & CPA</button>
+  <button class="tab-btn" onclick="setTab('regions',this)">🗺️ Regional</button>
+  <button class="tab-btn" onclick="setTab('team',this)">👥 Team & Staffing</button>
+</div>
+
+<!-- ═══════════════════════════════════════ CONTENT ═══════════════════════════════════════ -->
+<div class="content">
+  <!-- Config -->
+  <div id="configPanel" class="config" style="display:none">
+    <h2>Connect to Airtable</h2>
+    <label>Personal Access Token</label>
+    <input type="password" id="cfgToken" placeholder="pat...">
+    <p class="hint">Create at airtable.com/create/tokens — needs data.records:read scope on the Budget Tracking base.</p>
+    <button onclick="saveConfig()">Connect & Load Data</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingEl" class="loading" style="display:none"><div class="spinner"></div><span style="color:var(--text2)">Loading data from Airtable...</span></div>
+
+  <!-- TAB: SUMMARY -->
+  <div id="tab-summary" class="tab-page active">
+    <div class="section-hdr"><h2 id="summaryTitle">YTD Performance</h2><div class="line"></div></div>
+    <div class="kpi-row" id="summaryKPIs"></div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Sales by Period: Budget vs Actual vs Forecast</h3><div class="chart-wrap"><canvas id="cSalesPeriod"></canvas></div></div>
+      <div class="chart-card"><h3>CPA by Period</h3><div class="chart-wrap"><canvas id="cCPAPeriod"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>Cumulative Spend: Budget vs Actual</h3><div class="chart-wrap"><canvas id="cSpendCum"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- TAB: SALES & CPA -->
+  <div id="tab-sales" class="tab-page">
+    <div class="section-hdr"><h2>Brand Performance</h2><div class="line"></div></div>
+    <div class="brand-split">
+      <div class="brand-col"><div class="brand-col-hdr bbn">🐶 Butternut</div><div class="brand-col-body"><div class="kpi-row" id="bbnKPIs"></div></div></div>
+      <div class="brand-col"><div class="brand-col-hdr mro">🐱 Marro</div><div class="brand-col-body"><div class="kpi-row" id="mroKPIs"></div></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>🐶 Butternut Sales by Period</h3><div class="chart-wrap"><canvas id="cBbnSales"></canvas></div></div>
+      <div class="chart-card"><h3>🐱 Marro Sales by Period</h3><div class="chart-wrap"><canvas id="cMroSales"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>🐶 Butternut CPA</h3><div class="chart-wrap"><canvas id="cBbnCPA"></canvas></div></div>
+      <div class="chart-card"><h3>🐱 Marro CPA</h3><div class="chart-wrap"><canvas id="cMroCPA"></canvas></div></div>
+    </div>
+    <div class="tbl-wrap"><h3>Period Detail</h3><div class="scroll"><table id="tblPeriod"></table></div></div>
+  </div>
+
+  <!-- TAB: REGIONAL -->
+  <div id="tab-regions" class="tab-page">
+    <div class="section-hdr"><h2>Regional Comparison</h2><div class="line"></div></div>
+    <div class="region-grid" id="regionCards"></div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Sales by Region</h3><div class="chart-wrap"><canvas id="cRegionSales"></canvas></div></div>
+      <div class="chart-card"><h3>CPA by Region</h3><div class="chart-wrap"><canvas id="cRegionCPA"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>SPS by Region</h3><div class="chart-wrap"><canvas id="cRegionSPS"></canvas></div></div>
+      <div class="chart-card"><h3>Team Size by Region</h3><div class="chart-wrap"><canvas id="cRegionTeam"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- TAB: TEAM -->
+  <div id="tab-team" class="tab-page">
+    <div class="section-hdr"><h2>Team Size & Staffing</h2><div class="line"></div></div>
+    <div class="kpi-row" id="teamKPIs"></div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Team Size by Period</h3><div class="chart-wrap"><canvas id="cTeamPeriod"></canvas></div></div>
+      <div class="chart-card"><h3>SPS Trend by Period</h3><div class="chart-wrap"><canvas id="cSPSPeriod"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Staffing Performance (Actual / Forecast Shifts)</h3><div class="chart-wrap"><canvas id="cStaffPerf"></canvas></div></div>
+      <div class="chart-card"><h3>Shifts: Forecast vs Actual</h3><div class="chart-wrap"><canvas id="cShifts"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const BASE_ID = 'appcbUbKvlLayiuo5';
+const TABLE_NAME = '📊 Weekly Summary';
+const PERIODS = ['P1','P2','P3','P4','P5','P6','P7','P8','P9','P10','P11','P12','P13'];
+const P_ORD = Object.fromEntries(PERIODS.map((p,i)=>[p,i+1]));
+
+// Brand colour palettes (matching WBR charts)
+const C = {
+  butternut: { bud:'#10507C', fcst:'#522A10', act:'#ED6961', budA:.4, actA:.8 },
+  marro:     { bud:'#80020F', fcst:'#DABFBD', act:'#C88131', budA:.4, actA:.8 },
+  combined:  { bud:'#10507C', fcst:'#9BC3FE', act:'#522A10', budA:.4, actA:.8 },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let STATE = { brand:'combined', records:[], charts:{} };
+
+// ═══════════════════════════════════════════════════════════════
+// AIRTABLE API
+// ═══════════════════════════════════════════════════════════════
+async function fetchRecords(token, year) {
+  const fields = [
+    '⚙️ Year','⚙️ Period','⚙️ Week','⚙️ Region','⚙️ Region Group','⚙️ Market','⚙️ Channel','⚙️ Level',
+    '🔵🐶 Sales','🟡🐶 Sales','🔴🐶 Sales','🔵🐱 Sales','🟡🐱 Sales','🔴🐱 Sales',
+    '🔵🐶 Spend','🟡🐶 Spend','🔴🐶 Spend','🔵🐱 Spend','🟡🐱 Spend','🔴🐱 Spend',
+    '🔵🐶 CPA','🟡🐶 CPA','🔴🐶 CPA','🔵🐱 CPA','🟡🐱 CPA','🔴🐱 CPA',
+    '🔵🐶 SPS','🟡🐶 SPS','🔴🐶 SPS','🔵🐱 SPS','🟡🐱 SPS','🔴🐱 SPS',
+    '🔴 Rep Team Size','🔴 BA Team Size','🔴 Shifts','🟡 Shifts','🔴 Staffing Performance',
+    '🐶 Sales Var vs Budget','🐶 Sales Var % vs Budget','🐱 Sales Var vs Budget','🐱 Sales Var % vs Budget',
+    '🐶 Spend Var vs Budget','🐱 Spend Var vs Budget',
+  ];
+  const headers = { Authorization: `Bearer ${token}` };
+  let all = [], offset = null;
+  do {
+    let url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?`;
+    url += fields.map(f=>`fields[]=${encodeURIComponent(f)}`).join('&');
+    url += `&filterByFormula=${encodeURIComponent(`{⚙️ Year}="${year}"`)}`;
+    if (offset) url += `&offset=${offset}`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error(`API ${resp.status}: ${resp.statusText}`);
+    const json = await resp.json();
+    all = all.concat(json.records);
+    offset = json.offset;
+  } while (offset);
+  return all;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function gv(r,f){ const v=r.fields[f]; if(v==null) return 0; if(typeof v==='object'&&v.name) return v.name; if(typeof v==='string') return parseFloat(v.replace(/[£,]/g,''))||0; return Number(v)||0; }
+function gs(r,f){ const v=r.fields[f]; if(!v) return ''; if(typeof v==='object'&&v.name) return v.name; return String(v); }
+function sum(recs,f){ return recs.reduce((s,r)=>s+gv(r,f),0); }
+function avg(recs,f){ const vals=recs.map(r=>gv(r,f)).filter(v=>v); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0; }
+function wAvg(recs,numF,denF){ const n=sum(recs,numF),d=sum(recs,denF); return d?n/d:0; }
+
+function fmt(n){ return n==null||isNaN(n)?'—':Math.round(n).toLocaleString('en-GB'); }
+function fmtC(n){ return n==null||isNaN(n)?'—':'£'+Math.round(n).toLocaleString('en-GB'); }
+function fmtCPA(n){ return !n||isNaN(n)?'—':'£'+n.toFixed(2); }
+function fmtP(n){ return n==null||isNaN(n)?'—':(n*100).toFixed(1)+'%'; }
+function fmtV(n){ if(n==null||isNaN(n)) return '—'; return (n>=0?'+':'')+((n*100).toFixed(1))+'%'; }
+
+// Group records by a field value
+function groupBy(recs,f){ const g={}; for(const r of recs){ const k=gs(r,f); if(k){ if(!g[k]) g[k]=[]; g[k].push(r); } } return g; }
+
+// Filter helpers
+function getFiltered() {
+  const level = document.getElementById('selLevel').value;
+  const period = document.getElementById('selPeriod').value;
+  const region = document.getElementById('selRegion').value;
+  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === level);
+  if (period !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === period);
+  if (region !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region') === region || gs(r,'⚙️ Region Group') === region || gs(r,'⚙️ Market') === region);
+  return recs;
+}
+
+function getPeriodsWithData(recs) {
+  const byP = groupBy(recs,'⚙️ Period');
+  return PERIODS.filter(p => byP[p] && byP[p].some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0));
+}
+
+// Get brand-aware field values
+function bSales(recs,prefix) {
+  const b = STATE.brand;
+  if(b==='butternut') return sum(recs,`${prefix}🐶 Sales`);
+  if(b==='marro') return sum(recs,`${prefix}🐱 Sales`);
+  return sum(recs,`${prefix}🐶 Sales`) + sum(recs,`${prefix}🐱 Sales`);
+}
+function bSpend(recs,prefix) {
+  const b = STATE.brand;
+  if(b==='butternut') return sum(recs,`${prefix}🐶 Spend`);
+  if(b==='marro') return sum(recs,`${prefix}🐱 Spend`);
+  return sum(recs,`${prefix}🐶 Spend`) + sum(recs,`${prefix}🐱 Spend`);
+}
+function bCPA(recs,prefix) {
+  const sales = bSales(recs,prefix), spend = bSpend(recs,prefix);
+  return sales > 0 ? spend / sales : 0;
+}
+function bSPS(recs,prefix) {
+  const b = STATE.brand;
+  if(b==='butternut') return avg(recs,`${prefix}🐶 SPS`);
+  if(b==='marro') return avg(recs,`${prefix}🐱 SPS`);
+  return (avg(recs,`${prefix}🐶 SPS`) + avg(recs,`${prefix}🐱 SPS`)) / 2;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KPI CARD BUILDER
+// ═══════════════════════════════════════════════════════════════
+function kpi(label,value,budLbl,budVal,variance,icon,color,invertVar) {
+  const pos = variance!=null ? (invertVar ? variance<=0 : variance>=0) : true;
+  return `<div class="kpi"><div class="stripe" style="background:${color}"></div><div class="icon">${icon}</div>
+    <div class="label">${label}</div><div class="value">${value}</div>
+    ${budLbl?`<div class="compare">${budLbl}: <b>${budVal}</b></div>`:''}
+    ${variance!=null?`<div class="var ${pos?'pos':'neg'}">${fmtV(variance)}</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHART HELPERS
+// ═══════════════════════════════════════════════════════════════
+function destroyChart(id) { if(STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; } }
+
+function makeBarChart(id, labels, datasets, opts={}) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  STATE.charts[id] = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } }, datalabels:{ display:false } },
+      scales:{
+        x:{ grid:{display:false} },
+        y:{ beginAtZero:true, ticks:{ callback: opts.yFmt || (v=>fmt(v)) }, grid:{color:'rgba(0,0,0,.04)'} },
+      },
+    },
+  });
+}
+
+function makeLineChart(id, labels, datasets, opts={}) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  STATE.charts[id] = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } }, datalabels:{ display:false } },
+      scales:{
+        x:{ grid:{display:false} },
+        y:{ beginAtZero: opts.zero!==false, ticks:{ callback: opts.yFmt || (v=>fmtC(v)) }, grid:{color:'rgba(0,0,0,.04)'} },
+      },
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: SUMMARY TAB
+// ═══════════════════════════════════════════════════════════════
+function renderSummary() {
+  const recs = getFiltered();
+  const byP = groupBy(recs,'⚙️ Period');
+  const col = C[STATE.brand];
+  const periodsActive = getPeriodsWithData(recs);
+  const allPeriodRecs = recs; // already filtered
+
+  // KPIs — aggregate across all filtered records
+  const salesA = bSales(allPeriodRecs,'🔴'), salesB = bSales(allPeriodRecs,'🔵');
+  const spendA = bSpend(allPeriodRecs,'🔴'), spendB = bSpend(allPeriodRecs,'🔵');
+  const cpaA = salesA>0?spendA/salesA:0, cpaB = salesB>0?spendB/salesB:0;
+  const spsA = bSPS(allPeriodRecs,'🔴'), spsB = bSPS(allPeriodRecs,'🔵');
+  const acqVar = salesB>0?(salesA-salesB)/salesB:null;
+  const spVar = spendB>0?(spendA-spendB)/spendB:null;
+  const cpaVar = cpaB>0?(cpaA-cpaB)/cpaB:null;
+
+  document.getElementById('summaryKPIs').innerHTML =
+    kpi('Sales',fmt(salesA),'🔵 Budget',fmt(salesB),acqVar,'📈',col.act) +
+    kpi('Spend',fmtC(spendA),'🔵 Budget',fmtC(spendB),spVar,'💰',col.bud,true) +
+    kpi('CPA',fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaVar,'🎯',col.fcst,true) +
+    kpi('SPS',spsA.toFixed(1),'🔵 Budget',spsB.toFixed(1),spsB>0?(spsA-spsB)/spsB:null,'⚡',col.act);
+
+  // Sales by period chart
+  const periods = PERIODS.filter(p=>byP[p]);
+  makeBarChart('cSalesPeriod', periods, [
+    { label:'🔵 Budget', data:periods.map(p=>bSales(byP[p]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:2 },
+    { label:'🔴 Actual', data:periods.map(p=>bSales(byP[p]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+    { label:'🟡 Forecast', data:periods.map(p=>bSales(byP[p]||[],'🟡')), type:'line', borderColor:col.fcst, backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:4, pointBackgroundColor:col.fcst, tension:.3, order:-1 },
+  ]);
+
+  // CPA by period
+  makeLineChart('cCPAPeriod', periods, [
+    { label:'🔵 Budget CPA', data:periods.map(p=>bCPA(byP[p]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], pointRadius:4, pointBackgroundColor:col.bud, tension:.3 },
+    { label:'🔴 Actual CPA', data:periods.map(p=>bCPA(byP[p]||[],'🔴')), borderColor:col.act, borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3 },
+  ], { zero:false });
+
+  // Cumulative spend
+  let cumB=0, cumA=0;
+  const cumBData=[], cumAData=[];
+  for(const p of periods) { cumB+=bSpend(byP[p]||[],'🔵'); cumA+=bSpend(byP[p]||[],'🔴'); cumBData.push(cumB); cumAData.push(cumA); }
+  makeLineChart('cSpendCum', periods, [
+    { label:'🔵 Budget', data:cumBData, borderColor:col.bud, borderWidth:3, borderDash:[8,4], fill:true, backgroundColor:col.bud+'15', tension:.3 },
+    { label:'🔴 Actual', data:cumAData, borderColor:col.act, borderWidth:3, fill:true, backgroundColor:col.act+'20', tension:.3 },
+  ]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: SALES & CPA TAB
+// ═══════════════════════════════════════════════════════════════
+function renderSales() {
+  const recs = getFiltered();
+  const byP = groupBy(recs,'⚙️ Period');
+  const periods = PERIODS.filter(p=>byP[p]);
+  const bbn = C.butternut, mro = C.marro;
+
+  // BBN KPIs
+  const ba=sum(recs,'🔴🐶 Sales'),bb=sum(recs,'🔵🐶 Sales'),bsa=sum(recs,'🔴🐶 Spend'),bsb=sum(recs,'🔵🐶 Spend');
+  const bcpa=ba>0?bsa/ba:0,bcpab=bb>0?bsb/bb:0;
+  document.getElementById('bbnKPIs').innerHTML =
+    kpi('Sales',fmt(ba),'Budget',fmt(bb),bb>0?(ba-bb)/bb:null,'📈',bbn.act) +
+    kpi('CPA',fmtCPA(bcpa),'Budget',fmtCPA(bcpab),bcpab>0?(bcpa-bcpab)/bcpab:null,'🎯',bbn.bud,true);
+
+  // MRO KPIs
+  const ma=sum(recs,'🔴🐱 Sales'),mb=sum(recs,'🔵🐱 Sales'),msa=sum(recs,'🔴🐱 Spend'),msb=sum(recs,'🔵🐱 Spend');
+  const mcpa=ma>0?msa/ma:0,mcpab=mb>0?msb/mb:0;
+  document.getElementById('mroKPIs').innerHTML =
+    kpi('Sales',fmt(ma),'Budget',fmt(mb),mb>0?(ma-mb)/mb:null,'📈',mro.act) +
+    kpi('CPA',fmtCPA(mcpa),'Budget',fmtCPA(mcpab),mcpab>0?(mcpa-mcpab)/mcpab:null,'🎯',mro.bud,true);
+
+  // BBN Sales chart
+  makeBarChart('cBbnSales', periods, [
+    { label:'🔵 Budget', data:periods.map(p=>sum(byP[p]||[],'🔵🐶 Sales')), backgroundColor:bbn.bud+'66', borderColor:bbn.bud, borderWidth:2 },
+    { label:'🔴 Actual', data:periods.map(p=>sum(byP[p]||[],'🔴🐶 Sales')), backgroundColor:bbn.act+'CC', borderColor:bbn.act, borderWidth:2 },
+    { label:'🟡 Fcst', data:periods.map(p=>sum(byP[p]||[],'🟡🐶 Sales')), type:'line', borderColor:bbn.fcst, backgroundColor:'transparent', borderWidth:2, borderDash:[6,3], pointRadius:3, tension:.3, order:-1 },
+  ]);
+
+  // MRO Sales chart
+  makeBarChart('cMroSales', periods, [
+    { label:'🔵 Budget', data:periods.map(p=>sum(byP[p]||[],'🔵🐱 Sales')), backgroundColor:mro.bud+'66', borderColor:mro.bud, borderWidth:2 },
+    { label:'🔴 Actual', data:periods.map(p=>sum(byP[p]||[],'🔴🐱 Sales')), backgroundColor:mro.act+'CC', borderColor:mro.act, borderWidth:2 },
+    { label:'🟡 Fcst', data:periods.map(p=>sum(byP[p]||[],'🟡🐱 Sales')), type:'line', borderColor:mro.fcst, backgroundColor:'transparent', borderWidth:2, borderDash:[6,3], pointRadius:3, tension:.3, order:-1 },
+  ]);
+
+  // CPA charts
+  makeLineChart('cBbnCPA', periods, [
+    { label:'🔵 Budget', data:periods.map(p=>{const r=byP[p]||[];const s=sum(r,'🔵🐶 Sales'),sp=sum(r,'🔵🐶 Spend');return s>0?sp/s:null;}), borderColor:bbn.bud, borderWidth:3, borderDash:[8,4], tension:.3 },
+    { label:'🔴 Actual', data:periods.map(p=>{const r=byP[p]||[];const s=sum(r,'🔴🐶 Sales'),sp=sum(r,'🔴🐶 Spend');return s>0?sp/s:null;}), borderColor:bbn.act, borderWidth:3, tension:.3 },
+  ],{zero:false});
+  makeLineChart('cMroCPA', periods, [
+    { label:'🔵 Budget', data:periods.map(p=>{const r=byP[p]||[];const s=sum(r,'🔵🐱 Sales'),sp=sum(r,'🔵🐱 Spend');return s>0?sp/s:null;}), borderColor:mro.bud, borderWidth:3, borderDash:[8,4], tension:.3 },
+    { label:'🔴 Actual', data:periods.map(p=>{const r=byP[p]||[];const s=sum(r,'🔴🐱 Sales'),sp=sum(r,'🔴🐱 Spend');return s>0?sp/s:null;}), borderColor:mro.act, borderWidth:3, tension:.3 },
+  ],{zero:false});
+
+  // Period table
+  let h=`<thead><tr><th>Period</th><th>🔵🐶 Sales</th><th>🔴🐶 Actual</th><th>🐶 Var%</th><th>🔵🐱 Sales</th><th>🔴🐱 Actual</th><th>🐱 Var%</th><th>🔴🐶 CPA</th><th>🔴🐱 CPA</th></tr></thead><tbody>`;
+  for(const p of periods) {
+    const r=byP[p]||[];
+    const bs=sum(r,'🔵🐶 Sales'),ba2=sum(r,'🔴🐶 Sales'),ms2=sum(r,'🔵🐱 Sales'),ma2=sum(r,'🔴🐱 Sales');
+    const bv=bs>0?(ba2-bs)/bs:0, mv=ms2>0?(ma2-ms2)/ms2:0;
+    const bc2=sum(r,'🔴🐶 Spend'),mc2=sum(r,'🔴🐱 Spend');
+    h+=`<tr><td>${p}</td><td>${fmt(bs)}</td><td>${fmt(ba2)}</td><td class="${bv>=0?'pos':'neg'}">${fmtV(bv)}</td><td>${fmt(ms2)}</td><td>${fmt(ma2)}</td><td class="${mv>=0?'pos':'neg'}">${fmtV(mv)}</td><td>${fmtCPA(ba2>0?bc2/ba2:0)}</td><td>${fmtCPA(ma2>0?mc2/ma2:0)}</td></tr>`;
+  }
+  h+='</tbody>';
+  document.getElementById('tblPeriod').innerHTML = h;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: REGIONAL TAB
+// ═══════════════════════════════════════════════════════════════
+function renderRegions() {
+  // Force Level=Region for this tab
+  const period = document.getElementById('selPeriod').value;
+  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
+  if (period !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === period);
+  const byR = groupBy(recs,'⚙️ Region');
+  const col = C[STATE.brand];
+
+  // Sort regions by actual sales descending
+  const regions = Object.keys(byR).sort((a,b) => bSales(byR[b],'🔴') - bSales(byR[a],'🔴'));
+
+  // Region cards
+  let cards = '';
+  for(const reg of regions) {
+    const r = byR[reg];
+    const sales = bSales(r,'🔴'), cpa = bCPA(r,'🔴'), sps = bSPS(r,'🔴');
+    const team = sum(r,'🔴 BA Team Size') + sum(r,'🔴 Rep Team Size');
+    cards += `<div class="region-card">
+      <div class="rname">${reg}</div>
+      <div class="rval">${fmt(sales)}</div>
+      <div class="rsub">CPA: ${fmtCPA(cpa)} | SPS: ${sps.toFixed(1)}</div>
+      <div class="rsub">Team: ${fmt(team)}</div>
+    </div>`;
+  }
+  document.getElementById('regionCards').innerHTML = cards;
+
+  // Regional bar charts
+  makeBarChart('cRegionSales', regions, [
+    { label:'🔵 Budget', data:regions.map(r=>bSales(byR[r],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
+    { label:'🔴 Actual', data:regions.map(r=>bSales(byR[r],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+  ]);
+
+  makeBarChart('cRegionCPA', regions, [
+    { label:'🔵 Budget CPA', data:regions.map(r=>bCPA(byR[r],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
+    { label:'🔴 Actual CPA', data:regions.map(r=>bCPA(byR[r],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+  ], { yFmt: v=>fmtCPA(v) });
+
+  makeBarChart('cRegionSPS', regions, [
+    { label:'🔵 Budget SPS', data:regions.map(r=>bSPS(byR[r],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
+    { label:'🔴 Actual SPS', data:regions.map(r=>bSPS(byR[r],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+  ], { yFmt: v=>v.toFixed(1) });
+
+  // Team size stacked
+  makeBarChart('cRegionTeam', regions, [
+    { label:'BA', data:regions.map(r=>sum(byR[r],'🔴 BA Team Size')), backgroundColor:'#10507CAA' },
+    { label:'Rep', data:regions.map(r=>sum(byR[r],'🔴 Rep Team Size')), backgroundColor:'#ED6961AA' },
+  ]);
+  if(STATE.charts['cRegionTeam']) { STATE.charts['cRegionTeam'].options.scales.x.stacked=true; STATE.charts['cRegionTeam'].options.scales.y.stacked=true; STATE.charts['cRegionTeam'].update(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: TEAM TAB
+// ═══════════════════════════════════════════════════════════════
+function renderTeam() {
+  const recs = getFiltered();
+  const byP = groupBy(recs,'⚙️ Period');
+  const col = C[STATE.brand];
+  const periods = PERIODS.filter(p=>byP[p]);
+
+  const totalBA = sum(recs,'🔴 BA Team Size'), totalRep = sum(recs,'🔴 Rep Team Size');
+  const avgStaff = avg(recs,'🔴 Staffing Performance');
+  const totalShiftsA = sum(recs,'🔴 Shifts'), totalShiftsF = sum(recs,'🟡 Shifts');
+
+  document.getElementById('teamKPIs').innerHTML =
+    kpi('Total Team',fmt(totalBA+totalRep),'BA + Rep',`${fmt(totalBA)} + ${fmt(totalRep)}`,null,'👥',col.act) +
+    kpi('BA Team',fmt(totalBA),'Brand Ambassadors','',null,'🎪',col.bud) +
+    kpi('Rep Team',fmt(totalRep),'Sales Reps','',null,'🏷️',col.fcst) +
+    kpi('Staffing Perf.',fmtP(avgStaff),'Actual / Forecast Shifts','',avgStaff>0?avgStaff-1:null,'⚡',avgStaff>=0.95?'var(--pos)':'var(--neg)');
+
+  // Team by period
+  makeBarChart('cTeamPeriod', periods, [
+    { label:'BA', data:periods.map(p=>sum(byP[p]||[],'🔴 BA Team Size')), backgroundColor:'#10507CAA' },
+    { label:'Rep', data:periods.map(p=>sum(byP[p]||[],'🔴 Rep Team Size')), backgroundColor:'#ED6961AA' },
+  ]);
+  if(STATE.charts['cTeamPeriod']) { STATE.charts['cTeamPeriod'].options.scales.x.stacked=true; STATE.charts['cTeamPeriod'].options.scales.y.stacked=true; STATE.charts['cTeamPeriod'].update(); }
+
+  // SPS trend
+  makeLineChart('cSPSPeriod', periods, [
+    { label:'🔵 Budget SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], tension:.3 },
+    { label:'🔴 Actual SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔴')), borderColor:col.act, borderWidth:3, tension:.3 },
+  ], { yFmt:v=>v.toFixed(1), zero:false });
+
+  // Staffing performance
+  makeLineChart('cStaffPerf', periods, [
+    { label:'Staffing %', data:periods.map(p=>avg(byP[p]||[],'🔴 Staffing Performance')), borderColor:col.act, borderWidth:3, tension:.3, fill:true, backgroundColor:col.act+'20' },
+    { label:'100% Target', data:periods.map(()=>1), borderColor:'#999', borderWidth:1, borderDash:[4,4], pointRadius:0 },
+  ], { yFmt:v=>fmtP(v) });
+
+  // Shifts
+  makeBarChart('cShifts', periods, [
+    { label:'🟡 Forecast', data:periods.map(p=>sum(byP[p]||[],'🟡 Shifts')), backgroundColor:col.fcst+'66', borderColor:col.fcst, borderWidth:1 },
+    { label:'🔴 Actual', data:periods.map(p=>sum(byP[p]||[],'🔴 Shifts')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+  ]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════════
+function render() {
+  renderSummary();
+  renderSales();
+  renderRegions();
+  renderTeam();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+function setTab(id, btn) {
+  document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+function setBrand(b) {
+  STATE.brand = b;
+  document.body.className = b==='marro'?'theme-marro':b==='combined'?'theme-combined':'';
+  document.querySelectorAll('.brand-btn').forEach(btn=>btn.classList.remove('active'));
+  event.target.classList.add('active');
+  const titles = { butternut:'🐶 DS Performance Dashboard', marro:'🐱 DS Performance Dashboard', combined:'🐾 DS Performance Dashboard' };
+  document.getElementById('title').textContent = titles[b];
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POPULATE FILTERS
+// ═══════════════════════════════════════════════════════════════
+function populateFilters(records) {
+  // Periods
+  const periods = new Set(records.map(r=>gs(r,'⚙️ Period')).filter(Boolean));
+  const selP = document.getElementById('selPeriod');
+  selP.innerHTML = '<option value="all">All Periods</option>';
+  PERIODS.filter(p=>periods.has(p)).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; selP.appendChild(o); });
+
+  // Regions
+  const regions = new Set(records.filter(r=>gs(r,'⚙️ Level')==='Region').map(r=>gs(r,'⚙️ Region')).filter(Boolean));
+  const selR = document.getElementById('selRegion');
+  selR.innerHTML = '<option value="all">All Regions</option>';
+  [...regions].sort().forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; selR.appendChild(o); });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════════════════════
+async function loadData() {
+  const token = localStorage.getItem('at_token');
+  if (!token) { document.getElementById('configPanel').style.display='block'; return; }
+
+  document.getElementById('configPanel').style.display='none';
+  document.getElementById('loadingEl').style.display='flex';
+
+  try {
+    const year = document.getElementById('selYear').value;
+    STATE.records = await fetchRecords(token, year);
+    console.log(`✅ Loaded ${STATE.records.length} records for ${year}`);
+    populateFilters(STATE.records);
+    document.getElementById('loadingEl').style.display='none';
+    render();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('loadingEl').innerHTML = `<div style="color:var(--neg);text-align:center"><h3>Error Loading Data</h3><p style="margin-top:8px">${e.message}</p><button onclick="localStorage.removeItem('at_token');location.reload()" style="margin-top:12px;padding:8px 16px;border-radius:6px;border:none;background:var(--hdr);color:var(--hdr-t);cursor:pointer;font-weight:600">Reconfigure</button></div>`;
+  }
+}
+
+function saveConfig() {
+  const token = document.getElementById('cfgToken').value.trim();
+  if (!token) return;
+  localStorage.setItem('at_token', token);
+  loadData();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  loadData();
+});
+</script>
+</body>
+</html>
