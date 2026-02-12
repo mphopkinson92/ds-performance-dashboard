@@ -150,7 +150,15 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
       <option value="period">By Period</option>
       <option value="week" selected>By Week</option>
     </select>
-    <select id="selPeriod" onchange="render()"><option value="all">All Periods</option></select>
+    <select id="selRange" onchange="render()" title="Range">
+      <option value="ytd">YTD</option>
+      <option value="Q1">Q1 (P1-P3)</option>
+      <option value="Q2">Q2 (P4-P6)</option>
+      <option value="Q3">Q3 (P7-P9)</option>
+      <option value="Q4">Q4 (P10-P13)</option>
+      <option value="full">Full Year</option>
+    </select>
+    <select id="selPeriod" onchange="render()"><option value="all">All</option></select>
     <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
     <select id="selLevel" onchange="render()">
       <option value="Region">Region</option>
@@ -335,20 +343,43 @@ function getPeriodsWithData(recs) {
   return PERIODS.filter(p => byP[p] && byP[p].some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0));
 }
 
-// Time axis helper — returns { field, labels, grouped } based on Period/Week view toggle
+// Quarter to period/week mapping
+const Q_PERIODS = { Q1:['P1','P2','P3'], Q2:['P4','P5','P6'], Q3:['P7','P8','P9'], Q4:['P10','P11','P12','P13'] };
+const Q_WEEKS = { Q1: WEEKS.slice(0,13), Q2: WEEKS.slice(13,26), Q3: WEEKS.slice(26,39), Q4: WEEKS.slice(39,52) };
+
+// Check if a time bucket has actual data (not future/empty)
+function hasActualData(recs) {
+  return recs.some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0 || gv(r,'🔴🐶 Spend')>0 || gv(r,'🔴🐱 Spend')>0);
+}
+
+// Time axis helper — returns { field, labels, grouped } based on view + range
 function getTimeAxis(recs) {
   const view = document.getElementById('selView').value;
-  if (view === 'week') {
-    const field = '⚙️ Week';
-    const grouped = groupBy(recs, field);
-    const labels = WEEKS.filter(w => grouped[w]);
-    return { field, labels, grouped };
+  const range = document.getElementById('selRange').value;
+
+  const field = view === 'week' ? '⚙️ Week' : '⚙️ Period';
+  const allLabels = view === 'week' ? WEEKS : PERIODS;
+  const grouped = groupBy(recs, field);
+
+  // Filter by quarter range
+  let rangeLabels;
+  if (range === 'full') {
+    rangeLabels = allLabels;
+  } else if (Q_PERIODS[range]) {
+    rangeLabels = view === 'week' ? Q_WEEKS[range] : Q_PERIODS[range];
   } else {
-    const field = '⚙️ Period';
-    const grouped = groupBy(recs, field);
-    const labels = PERIODS.filter(p => grouped[p]);
-    return { field, labels, grouped };
+    // YTD — only show labels that have actual data
+    rangeLabels = allLabels;
   }
+
+  // Only show labels that exist in data AND (for YTD) have actual data — hide future empty weeks
+  const labels = rangeLabels.filter(t => {
+    if (!grouped[t]) return false;
+    if (range === 'ytd' || range === 'full') return hasActualData(grouped[t]);
+    return true; // For Q filters, show all weeks in range even if no actuals yet (budget still relevant)
+  });
+
+  return { field, labels, grouped };
 }
 
 function onViewChange() {
@@ -410,22 +441,37 @@ function kpi(label,value,budLbl,budVal,variance,icon,color,invertVar) {
 // ═══════════════════════════════════════════════════════════════
 function destroyChart(id) { if(STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; } }
 
+function shouldShowLabels() {
+  // Show data labels when <= 13 data points (period view or quarter), hide for full weekly
+  const view = document.getElementById('selView').value;
+  const range = document.getElementById('selRange').value;
+  if (view === 'period') return true;
+  if (range !== 'ytd' && range !== 'full') return true; // quarter = ~13 weeks, ok
+  return false; // full year weekly = too many
+}
+
 function makeBarChart(id, labels, datasets, opts={}) {
   destroyChart(id);
   const ctx = document.getElementById(id);
   if(!ctx) return;
+  const showLbl = shouldShowLabels();
+  const dlFmt = opts.yFmt || (v=>fmt(v));
   STATE.charts[id] = new Chart(ctx, {
     type:'bar',
     data:{ labels, datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{ intersect:false, mode:'index' },
-      plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } }, datalabels:{ display:false } },
+      plugins:{
+        legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
+        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:9,weight:'600'}, color:'#555', formatter: dlFmt },
+      },
       scales:{
-        x:{ grid:{display:false} },
+        x:{ grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
         y:{ beginAtZero:true, ticks:{ callback: opts.yFmt || (v=>fmt(v)) }, grid:{color:'rgba(0,0,0,.04)'} },
       },
     },
+    plugins: [ChartDataLabels],
   });
 }
 
@@ -433,18 +479,24 @@ function makeLineChart(id, labels, datasets, opts={}) {
   destroyChart(id);
   const ctx = document.getElementById(id);
   if(!ctx) return;
+  const showLbl = shouldShowLabels();
+  const dlFmt = opts.yFmt || (v=>fmtC(v));
   STATE.charts[id] = new Chart(ctx, {
     type:'line',
     data:{ labels, datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{ intersect:false, mode:'index' },
-      plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } }, datalabels:{ display:false } },
+      plugins:{
+        legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
+        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:9,weight:'600'}, color:'#555', formatter: dlFmt },
+      },
       scales:{
-        x:{ grid:{display:false} },
+        x:{ grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
         y:{ beginAtZero: opts.zero!==false, ticks:{ callback: opts.yFmt || (v=>fmtC(v)) }, grid:{color:'rgba(0,0,0,.04)'} },
       },
     },
+    plugins: [ChartDataLabels],
   });
 }
 
