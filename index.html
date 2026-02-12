@@ -146,6 +146,10 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <button class="brand-btn active" onclick="setBrand('butternut')">🐶 BBN</button>
     <button class="brand-btn" onclick="setBrand('marro')">🐱 MRO</button>
     <button class="brand-btn" onclick="setBrand('combined')">🐾 All</button>
+    <select id="selView" onchange="onViewChange()" title="View by">
+      <option value="period">By Period</option>
+      <option value="week" selected>By Week</option>
+    </select>
     <select id="selPeriod" onchange="render()"><option value="all">All Periods</option></select>
     <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
     <select id="selLevel" onchange="render()">
@@ -248,12 +252,14 @@ const BASE_ID = 'appcbUbKvlLayiuo5';
 const TABLE_NAME = '📊 Weekly Summary';
 const PERIODS = ['P1','P2','P3','P4','P5','P6','P7','P8','P9','P10','P11','P12','P13'];
 const P_ORD = Object.fromEntries(PERIODS.map((p,i)=>[p,i+1]));
+const WEEKS = Array.from({length:52},(_,i)=>`W${i+1}`);
+const W_ORD = Object.fromEntries(WEEKS.map((w,i)=>[w,i+1]));
 
-// Brand colour palettes (matching WBR charts)
+// Brand colour palettes
 const C = {
-  butternut: { bud:'#10507C', fcst:'#522A10', act:'#ED6961', budA:.4, actA:.8 },
-  marro:     { bud:'#80020F', fcst:'#DABFBD', act:'#C88131', budA:.4, actA:.8 },
-  combined:  { bud:'#10507C', fcst:'#9BC3FE', act:'#522A10', budA:.4, actA:.8 },
+  butternut: { bud:'#10507C', fcst:'#FFD54D', act:'#ED6961', budA:.4, actA:.8 },
+  marro:     { bud:'#10507C', fcst:'#FFD54D', act:'#ED6961', budA:.4, actA:.8 },
+  combined:  { bud:'#10507C', fcst:'#FFD54D', act:'#ED6961', budA:.4, actA:.8 },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -312,10 +318,14 @@ function groupBy(recs,f){ const g={}; for(const r of recs){ const k=gs(r,f); if(
 // Filter helpers
 function getFiltered() {
   const level = document.getElementById('selLevel').value;
-  const period = document.getElementById('selPeriod').value;
+  const timeSel = document.getElementById('selPeriod').value;
   const region = document.getElementById('selRegion').value;
+  const view = document.getElementById('selView').value;
   let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === level);
-  if (period !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === period);
+  if (timeSel !== 'all') {
+    const timeField = view === 'week' ? '⚙️ Week' : '⚙️ Period';
+    recs = recs.filter(r => gs(r, timeField) === timeSel);
+  }
   if (region !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region') === region || gs(r,'⚙️ Region Group') === region || gs(r,'⚙️ Market') === region);
   return recs;
 }
@@ -323,6 +333,40 @@ function getFiltered() {
 function getPeriodsWithData(recs) {
   const byP = groupBy(recs,'⚙️ Period');
   return PERIODS.filter(p => byP[p] && byP[p].some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0));
+}
+
+// Time axis helper — returns { field, labels, grouped } based on Period/Week view toggle
+function getTimeAxis(recs) {
+  const view = document.getElementById('selView').value;
+  if (view === 'week') {
+    const field = '⚙️ Week';
+    const grouped = groupBy(recs, field);
+    const labels = WEEKS.filter(w => grouped[w]);
+    return { field, labels, grouped };
+  } else {
+    const field = '⚙️ Period';
+    const grouped = groupBy(recs, field);
+    const labels = PERIODS.filter(p => grouped[p]);
+    return { field, labels, grouped };
+  }
+}
+
+function onViewChange() {
+  // Update the period/week selector label and options
+  const view = document.getElementById('selView').value;
+  const sel = document.getElementById('selPeriod');
+  const recs = STATE.records;
+  if (view === 'week') {
+    const weeks = new Set(recs.map(r=>gs(r,'⚙️ Week')).filter(Boolean));
+    sel.innerHTML = '<option value="all">All Weeks</option>';
+    WEEKS.filter(w=>weeks.has(w)).forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent=w; sel.appendChild(o); });
+  } else {
+    const periods = new Set(recs.map(r=>gs(r,'⚙️ Period')).filter(Boolean));
+    sel.innerHTML = '<option value="all">All Periods</option>';
+    PERIODS.filter(p=>periods.has(p)).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+  }
+  sel.value = 'all';
+  render();
 }
 
 // Get brand-aware field values
@@ -409,16 +453,16 @@ function makeLineChart(id, labels, datasets, opts={}) {
 // ═══════════════════════════════════════════════════════════════
 function renderSummary() {
   const recs = getFiltered();
-  const byP = groupBy(recs,'⚙️ Period');
+  const { labels, grouped } = getTimeAxis(recs);
   const col = C[STATE.brand];
-  const periodsActive = getPeriodsWithData(recs);
-  const allPeriodRecs = recs; // already filtered
+  const view = document.getElementById('selView').value;
+  document.getElementById('summaryTitle').textContent = view === 'week' ? 'Weekly Performance' : 'Period Performance';
 
   // KPIs — aggregate across all filtered records
-  const salesA = bSales(allPeriodRecs,'🔴'), salesB = bSales(allPeriodRecs,'🔵');
-  const spendA = bSpend(allPeriodRecs,'🔴'), spendB = bSpend(allPeriodRecs,'🔵');
+  const salesA = bSales(recs,'🔴'), salesB = bSales(recs,'🔵');
+  const spendA = bSpend(recs,'🔴'), spendB = bSpend(recs,'🔵');
   const cpaA = salesA>0?spendA/salesA:0, cpaB = salesB>0?spendB/salesB:0;
-  const spsA = bSPS(allPeriodRecs,'🔴'), spsB = bSPS(allPeriodRecs,'🔵');
+  const spsA = bSPS(recs,'🔴'), spsB = bSPS(recs,'🔵');
   const acqVar = salesB>0?(salesA-salesB)/salesB:null;
   const spVar = spendB>0?(spendA-spendB)/spendB:null;
   const cpaVar = cpaB>0?(cpaA-cpaB)/cpaB:null;
@@ -429,27 +473,26 @@ function renderSummary() {
     kpi('CPA',fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaVar,'🎯',col.fcst,true) +
     kpi('SPS',spsA.toFixed(1),'🔵 Budget',spsB.toFixed(1),spsB>0?(spsA-spsB)/spsB:null,'⚡',col.act);
 
-  // Sales by period chart
-  const periods = PERIODS.filter(p=>byP[p]);
-  makeBarChart('cSalesPeriod', periods, [
-    { label:'🔵 Budget', data:periods.map(p=>bSales(byP[p]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:2 },
-    { label:'🔴 Actual', data:periods.map(p=>bSales(byP[p]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
-    { label:'🟡 Forecast', data:periods.map(p=>bSales(byP[p]||[],'🟡')), type:'line', borderColor:col.fcst, backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:4, pointBackgroundColor:col.fcst, tension:.3, order:-1 },
+  // Sales by time axis
+  makeBarChart('cSalesPeriod', labels, [
+    { label:'🔵 Budget', data:labels.map(t=>bSales(grouped[t]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:2 },
+    { label:'🔴 Actual', data:labels.map(t=>bSales(grouped[t]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+    { label:'🟡 Forecast', data:labels.map(t=>bSales(grouped[t]||[],'🟡')), type:'line', borderColor:col.fcst, backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:view==='week'?2:4, pointBackgroundColor:col.fcst, tension:.3, order:-1 },
   ]);
 
-  // CPA by period
-  makeLineChart('cCPAPeriod', periods, [
-    { label:'🔵 Budget CPA', data:periods.map(p=>bCPA(byP[p]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], pointRadius:4, pointBackgroundColor:col.bud, tension:.3 },
-    { label:'🔴 Actual CPA', data:periods.map(p=>bCPA(byP[p]||[],'🔴')), borderColor:col.act, borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3 },
+  // CPA by time axis
+  makeLineChart('cCPAPeriod', labels, [
+    { label:'🔵 Budget CPA', data:labels.map(t=>bCPA(grouped[t]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], pointRadius:view==='week'?2:4, pointBackgroundColor:col.bud, tension:.3 },
+    { label:'🔴 Actual CPA', data:labels.map(t=>bCPA(grouped[t]||[],'🔴')), borderColor:col.act, borderWidth:3, pointRadius:view==='week'?2:5, pointBackgroundColor:col.act, tension:.3 },
   ], { zero:false });
 
   // Cumulative spend
   let cumB=0, cumA=0;
   const cumBData=[], cumAData=[];
-  for(const p of periods) { cumB+=bSpend(byP[p]||[],'🔵'); cumA+=bSpend(byP[p]||[],'🔴'); cumBData.push(cumB); cumAData.push(cumA); }
-  makeLineChart('cSpendCum', periods, [
-    { label:'🔵 Budget', data:cumBData, borderColor:col.bud, borderWidth:3, borderDash:[8,4], fill:true, backgroundColor:col.bud+'15', tension:.3 },
-    { label:'🔴 Actual', data:cumAData, borderColor:col.act, borderWidth:3, fill:true, backgroundColor:col.act+'20', tension:.3 },
+  for(const t of labels) { cumB+=bSpend(grouped[t]||[],'🔵'); cumA+=bSpend(grouped[t]||[],'🔴'); cumBData.push(cumB); cumAData.push(cumA); }
+  makeLineChart('cSpendCum', labels, [
+    { label:'🔵 Budget', data:cumBData, borderColor:col.bud, borderWidth:3, borderDash:[8,4], fill:true, backgroundColor:col.bud+'15', tension:.3, pointRadius:view==='week'?0:3 },
+    { label:'🔴 Actual', data:cumAData, borderColor:col.act, borderWidth:3, fill:true, backgroundColor:col.act+'20', tension:.3, pointRadius:view==='week'?0:3 },
   ]);
 }
 
@@ -458,8 +501,9 @@ function renderSummary() {
 // ═══════════════════════════════════════════════════════════════
 function renderSales() {
   const recs = getFiltered();
-  const byP = groupBy(recs,'⚙️ Period');
-  const periods = PERIODS.filter(p=>byP[p]);
+  const { labels, grouped: byP } = getTimeAxis(recs);
+  const periods = labels;
+  const view = document.getElementById('selView').value;
   const bbn = C.butternut, mro = C.marro;
 
   // BBN KPIs
@@ -571,9 +615,9 @@ function renderRegions() {
 // ═══════════════════════════════════════════════════════════════
 function renderTeam() {
   const recs = getFiltered();
-  const byP = groupBy(recs,'⚙️ Period');
+  const { labels: periods, grouped: byP } = getTimeAxis(recs);
   const col = C[STATE.brand];
-  const periods = PERIODS.filter(p=>byP[p]);
+  const view = document.getElementById('selView').value;
 
   const totalBA = sum(recs,'🔴 BA Team Size'), totalRep = sum(recs,'🔴 Rep Team Size');
   const avgStaff = avg(recs,'🔴 Staffing Performance');
@@ -645,11 +689,8 @@ function setBrand(b) {
 // POPULATE FILTERS
 // ═══════════════════════════════════════════════════════════════
 function populateFilters(records) {
-  // Periods
-  const periods = new Set(records.map(r=>gs(r,'⚙️ Period')).filter(Boolean));
-  const selP = document.getElementById('selPeriod');
-  selP.innerHTML = '<option value="all">All Periods</option>';
-  PERIODS.filter(p=>periods.has(p)).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; selP.appendChild(o); });
+  // Trigger the view change to populate period/week selector
+  onViewChange();
 
   // Regions
   const regions = new Set(records.filter(r=>gs(r,'⚙️ Level')==='Region').map(r=>gs(r,'⚙️ Region')).filter(Boolean));
