@@ -703,7 +703,10 @@ function populateFilters(records) {
 // DATA LOADING
 // ═══════════════════════════════════════════════════════════════
 async function loadData() {
-  const token = localStorage.getItem('at_token');
+  // Check URL param first, then localStorage, then show config
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  const token = urlToken || localStorage.getItem('at_token');
+  if (urlToken) localStorage.setItem('at_token', urlToken); // save for next visit
   if (!token) { document.getElementById('configPanel').style.display='block'; return; }
 
   document.getElementById('configPanel').style.display='none';
