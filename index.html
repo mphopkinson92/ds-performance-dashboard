@@ -285,7 +285,8 @@ async function fetchRecords(token, year) {
     '🔵🐶 Spend','🟡🐶 Spend','🔴🐶 Spend','🔵🐱 Spend','🟡🐱 Spend','🔴🐱 Spend',
     '🔵🐶 CPA','🟡🐶 CPA','🔴🐶 CPA','🔵🐱 CPA','🟡🐱 CPA','🔴🐱 CPA',
     '🔵🐶 SPS','🟡🐶 SPS','🔴🐶 SPS','🔵🐱 SPS','🟡🐱 SPS','🔴🐱 SPS',
-    '🔴 Rep Team Size','🔴 BA Team Size','🔴 Shifts','🟡 Shifts','🔴 Staffing Performance',
+    '🔴 Rep Team Size','🔴 BA Team Size','🔴 Total Team Size','🟡 Team Size Required','🔵 Rep Team Size p/w',
+    '🔴 Shifts','🟡 Shifts','🔴 Shift Capacity','🔴 Staffing Performance',
     '🐶 Sales Var vs Budget','🐶 Sales Var % vs Budget','🐱 Sales Var vs Budget','🐱 Sales Var % vs Budget',
     '🐶 Spend Var vs Budget','🐱 Spend Var vs Budget',
   ];
@@ -777,27 +778,33 @@ function renderTeam() {
   const col = C[STATE.brand];
   const view = document.getElementById('selView').value;
 
+  const totalActual = sum(recs,'🔴 Total Team Size'), totalRequired = sum(recs,'🟡 Team Size Required');
   const totalBA = sum(recs,'🔴 BA Team Size'), totalRep = sum(recs,'🔴 Rep Team Size');
+  const budgetRep = sum(recs,'🔵 Rep Team Size p/w');
   const avgStaff = avg(recs,'🔴 Staffing Performance');
   const totalShiftsA = sum(recs,'🔴 Shifts'), totalShiftsF = sum(recs,'🟡 Shifts');
+  const totalCapacity = sum(recs,'🔴 Shift Capacity');
+  const teamVar = totalRequired>0?(totalActual-totalRequired)/totalRequired:null;
 
   document.getElementById('teamKPIs').innerHTML =
-    kpi('Total Team',fmt(totalBA+totalRep),'BA + Rep',`${fmt(totalBA)} + ${fmt(totalRep)}`,null,'👥',col.act) +
+    kpi('Actual Team Size',fmt(totalActual),'🟡 Required',fmt(totalRequired),teamVar,'👥',col.act) +
     kpi('BA Team',fmt(totalBA),'Brand Ambassadors','',null,'🎪',col.bud) +
-    kpi('Rep Team',fmt(totalRep),'Sales Reps','',null,'🏷️',col.fcst) +
+    kpi('Rep Team',fmt(totalRep),'🔵 Budget Reps p/w',fmt(budgetRep),budgetRep>0?(totalRep-budgetRep)/budgetRep:null,'🏷️',col.fcst) +
+    kpi('Shift Capacity',fmt(totalCapacity),'🟡 Forecast Shifts',fmt(totalShiftsF),totalShiftsF>0?(totalCapacity-totalShiftsF)/totalShiftsF:null,'📋',col.bud) +
     kpi('Staffing Perf.',fmtP(avgStaff),'Actual / Forecast Shifts','',avgStaff>0?avgStaff-1:null,'⚡',avgStaff>=0.95?'var(--pos)':'var(--neg)');
 
-  // Team by period
+  // Team size: Actual vs Required vs Budget Rep
   makeBarChart('cTeamPeriod', periods, [
-    { label:'BA', data:periods.map(p=>sum(byP[p]||[],'🔴 BA Team Size')), backgroundColor:'#10507CAA' },
-    { label:'Rep', data:periods.map(p=>sum(byP[p]||[],'🔴 Rep Team Size')), backgroundColor:'#ED6961AA' },
+    { label:'🟡 Required', data:periods.map(p=>sum(byP[p]||[],'🟡 Team Size Required')), backgroundColor:col.fcst+'66', borderColor:col.fcst, borderWidth:2 },
+    { label:'🔴 Actual Total', data:periods.map(p=>sum(byP[p]||[],'🔴 Total Team Size')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+    { label:'🔵 Budget Reps p/w', data:periods.map(p=>sum(byP[p]||[],'🔵 Rep Team Size p/w')), type:'line', borderColor:col.bud, backgroundColor:'transparent', borderWidth:3, borderDash:[8,4], pointRadius:view==='week'?2:4, pointBackgroundColor:col.bud, tension:.3, order:-1 },
   ]);
-  if(STATE.charts['cTeamPeriod']) { STATE.charts['cTeamPeriod'].options.scales.x.stacked=true; STATE.charts['cTeamPeriod'].options.scales.y.stacked=true; STATE.charts['cTeamPeriod'].update(); }
 
   // SPS trend
   makeLineChart('cSPSPeriod', periods, [
-    { label:'🔵 Budget SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], tension:.3 },
-    { label:'🔴 Actual SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔴')), borderColor:col.act, borderWidth:3, tension:.3 },
+    { label:'🔵 Budget SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔵')), borderColor:col.bud, borderWidth:3, borderDash:[8,4], pointRadius:view==='week'?2:4, tension:.3 },
+    { label:'🟡 Forecast SPS', data:periods.map(p=>bSPS(byP[p]||[],'🟡')), borderColor:col.fcst, borderWidth:2, borderDash:[4,4], pointRadius:view==='week'?1:3, tension:.3 },
+    { label:'🔴 Actual SPS', data:periods.map(p=>bSPS(byP[p]||[],'🔴')), borderColor:col.act, borderWidth:3, pointRadius:view==='week'?2:5, tension:.3 },
   ], { yFmt:v=>v.toFixed(1), zero:false });
 
   // Staffing performance
@@ -806,10 +813,11 @@ function renderTeam() {
     { label:'100% Target', data:periods.map(()=>1), borderColor:'#999', borderWidth:1, borderDash:[4,4], pointRadius:0 },
   ], { yFmt:v=>fmtP(v) });
 
-  // Shifts
+  // Shifts: Forecast vs Actual vs Capacity
   makeBarChart('cShifts', periods, [
-    { label:'🟡 Forecast', data:periods.map(p=>sum(byP[p]||[],'🟡 Shifts')), backgroundColor:col.fcst+'66', borderColor:col.fcst, borderWidth:1 },
-    { label:'🔴 Actual', data:periods.map(p=>sum(byP[p]||[],'🔴 Shifts')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+    { label:'🟡 Forecast Shifts', data:periods.map(p=>sum(byP[p]||[],'🟡 Shifts')), backgroundColor:col.fcst+'66', borderColor:col.fcst, borderWidth:1 },
+    { label:'🔴 Actual Shifts', data:periods.map(p=>sum(byP[p]||[],'🔴 Shifts')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
+    { label:'🔴 Shift Capacity', data:periods.map(p=>sum(byP[p]||[],'🔴 Shift Capacity')), type:'line', borderColor:col.bud, backgroundColor:'transparent', borderWidth:3, borderDash:[8,4], pointRadius:view==='week'?2:4, pointBackgroundColor:col.bud, tension:.3, order:-1 },
   ]);
 }
 
