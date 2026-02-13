@@ -147,10 +147,10 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <button class="brand-btn" onclick="setBrand('marro')">🐱 MRO</button>
     <button class="brand-btn" onclick="setBrand('combined')">🐾 All</button>
     <select id="selView" onchange="onViewChange()" title="View by">
-      <option value="period">By Period</option>
       <option value="week" selected>By Week</option>
+      <option value="period">By Period</option>
     </select>
-    <select id="selRange" onchange="render()" title="Range">
+    <select id="selRange" onchange="render()" title="Quarter">
       <option value="ytd">YTD</option>
       <option value="Q1">Q1 (P1-P3)</option>
       <option value="Q2">Q2 (P4-P6)</option>
@@ -158,14 +158,9 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
       <option value="Q4">Q4 (P10-P13)</option>
       <option value="full">Full Year</option>
     </select>
-    <select id="selPeriod" onchange="render()"><option value="all">All</option></select>
-    <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
-    <select id="selLevel" onchange="render()">
-      <option value="Region">Region</option>
-      <option value="Region Group">Region Group</option>
-      <option value="Market" selected>Market</option>
-    </select>
-    <select id="selYear" onchange="loadData()"><option value="2026">2026</option><option value="2025">2025</option></select>
+    <select id="selPeriod" onchange="render()"><option value="all">All Periods</option></select>
+    <select id="selWeek" onchange="render()"><option value="all">All Weeks</option></select>
+    <select id="selRegionGroup" onchange="render()"><option value="all">All Region Groups</option></select>
     <button class="refresh-btn" onclick="loadData()" title="Refresh data">↻</button>
   </div>
 </div>
@@ -325,18 +320,38 @@ function fmtV(n){ if(n==null||isNaN(n)) return '—'; return (n>=0?'+':'')+((n*1
 function groupBy(recs,f){ const g={}; for(const r of recs){ const k=gs(r,f); if(k){ if(!g[k]) g[k]=[]; g[k].push(r); } } return g; }
 
 // Filter helpers
-function getFiltered() {
-  const level = document.getElementById('selLevel').value;
-  const timeSel = document.getElementById('selPeriod').value;
-  const region = document.getElementById('selRegion').value;
-  const view = document.getElementById('selView').value;
-  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === level);
-  if (timeSel !== 'all') {
-    const timeField = view === 'week' ? '⚙️ Week' : '⚙️ Period';
-    recs = recs.filter(r => gs(r, timeField) === timeSel);
+function applyGlobalFilters(recs) {
+  const periodSel = document.getElementById('selPeriod').value;
+  const weekSel = document.getElementById('selWeek').value;
+  const rgSel = document.getElementById('selRegionGroup').value;
+  const range = document.getElementById('selRange').value;
+
+  // Quarter filter
+  if (range !== 'full' && range !== 'ytd' && Q_PERIODS[range]) {
+    const allowed = new Set(Q_PERIODS[range]);
+    recs = recs.filter(r => allowed.has(gs(r,'⚙️ Period')));
   }
-  if (region !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region') === region || gs(r,'⚙️ Region Group') === region || gs(r,'⚙️ Market') === region);
+  if (range === 'ytd') recs = recs.filter(r => hasActualData([r]));
+
+  // Period filter
+  if (periodSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === periodSel);
+
+  // Week filter
+  if (weekSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Week') === weekSel);
+
+  // Region Group filter
+  if (rgSel !== 'all') {
+    const regionsInGroup = REG_IN_GROUP[rgSel] || [];
+    recs = recs.filter(r => regionsInGroup.includes(gs(r,'⚙️ Region')) || gs(r,'⚙️ Region Group') === rgSel);
+  }
+
   return recs;
+}
+
+function getFiltered() {
+  // For Summary/Team tabs — use Market level
+  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Market');
+  return applyGlobalFilters(recs);
 }
 
 function getPeriodsWithData(recs) {
@@ -384,20 +399,6 @@ function getTimeAxis(recs) {
 }
 
 function onViewChange() {
-  // Update the period/week selector label and options
-  const view = document.getElementById('selView').value;
-  const sel = document.getElementById('selPeriod');
-  const recs = STATE.records;
-  if (view === 'week') {
-    const weeks = new Set(recs.map(r=>gs(r,'⚙️ Week')).filter(Boolean));
-    sel.innerHTML = '<option value="all">All Weeks</option>';
-    WEEKS.filter(w=>weeks.has(w)).forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent=w; sel.appendChild(o); });
-  } else {
-    const periods = new Set(recs.map(r=>gs(r,'⚙️ Period')).filter(Boolean));
-    sel.innerHTML = '<option value="all">All Periods</option>';
-    PERIODS.filter(p=>periods.has(p)).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
-  }
-  sel.value = 'all';
   render();
 }
 
@@ -639,21 +640,7 @@ const RED_SHADES = {
 
 function getFilteredRegionRecs() {
   let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
-  const timeSel = document.getElementById('selPeriod').value;
-  const view = document.getElementById('selView').value;
-  const range = document.getElementById('selRange').value;
-  if (timeSel !== 'all') {
-    const tf = view==='week'?'⚙️ Week':'⚙️ Period';
-    recs = recs.filter(r => gs(r,tf) === timeSel);
-  }
-  if (range !== 'full' && range !== 'ytd' && Q_PERIODS[range]) {
-    const allowed = new Set(Q_PERIODS[range]);
-    recs = recs.filter(r => allowed.has(gs(r,'⚙️ Period')));
-  }
-  if (range === 'ytd') recs = recs.filter(r => hasActualData([r]));
-  const regionSel = document.getElementById('selRegion').value;
-  if (regionSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region')===regionSel || gs(r,'⚙️ Region Group')===regionSel);
-  return recs;
+  return applyGlobalFilters(recs);
 }
 
 function renderSales() {
@@ -831,25 +818,8 @@ function renderSales() {
 // RENDER: REGIONAL TAB (summary totals, controlled by filters)
 // ═══════════════════════════════════════════════════════════════
 function renderRegions() {
-  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
+  const recs = getFilteredRegionRecs();
   const col = C[STATE.brand];
-
-  // Apply time filter (range is handled by getFiltered-style logic)
-  const timeSel = document.getElementById('selPeriod').value;
-  const view = document.getElementById('selView').value;
-  const range = document.getElementById('selRange').value;
-  if (timeSel !== 'all') {
-    const tf = view==='week'?'⚙️ Week':'⚙️ Period';
-    recs = recs.filter(r => gs(r,tf) === timeSel);
-  }
-  // Apply range filter
-  if (range !== 'full' && range !== 'ytd' && Q_PERIODS[range]) {
-    const allowedPeriods = new Set(Q_PERIODS[range]);
-    recs = recs.filter(r => allowedPeriods.has(gs(r,'⚙️ Period')));
-  }
-  if (range === 'ytd') {
-    recs = recs.filter(r => hasActualData([r]));
-  }
 
   const byRegion = groupBy(recs,'⚙️ Region');
 
@@ -983,14 +953,22 @@ function setBrand(b) {
 // POPULATE FILTERS
 // ═══════════════════════════════════════════════════════════════
 function populateFilters(records) {
-  // Trigger the view change to populate period/week selector
-  onViewChange();
+  // Periods
+  const periods = new Set(records.map(r=>gs(r,'⚙️ Period')).filter(Boolean));
+  const selP = document.getElementById('selPeriod');
+  selP.innerHTML = '<option value="all">All Periods</option>';
+  PERIODS.filter(p=>periods.has(p)).forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; selP.appendChild(o); });
 
-  // Regions
-  const regions = new Set(records.filter(r=>gs(r,'⚙️ Level')==='Region').map(r=>gs(r,'⚙️ Region')).filter(Boolean));
-  const selR = document.getElementById('selRegion');
-  selR.innerHTML = '<option value="all">All Regions</option>';
-  [...regions].sort().forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; selR.appendChild(o); });
+  // Weeks
+  const weeks = new Set(records.map(r=>gs(r,'⚙️ Week')).filter(Boolean));
+  const selW = document.getElementById('selWeek');
+  selW.innerHTML = '<option value="all">All Weeks</option>';
+  WEEKS.filter(w=>weeks.has(w)).forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent=w; selW.appendChild(o); });
+
+  // Region Groups
+  const selRG = document.getElementById('selRegionGroup');
+  selRG.innerHTML = '<option value="all">All Region Groups</option>';
+  REG_GROUP_ORDER.forEach(rg => { const o=document.createElement('option'); o.value=rg; o.textContent=rg; selRG.appendChild(o); });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1007,7 +985,7 @@ async function loadData() {
   document.getElementById('loadingEl').style.display='flex';
 
   try {
-    const year = document.getElementById('selYear').value;
+    const year = '2026';
     STATE.records = await fetchRecords(token, year);
     console.log(`✅ Loaded ${STATE.records.length} records for ${year}`);
     populateFilters(STATE.records);
