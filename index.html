@@ -1025,8 +1025,9 @@ function renderRetention() {
     }
     html += `</div>`;
 
-    const c1=`cRT_${chartIdx++}`, c2=`cRT_${chartIdx++}`, c3=`cRT_${chartIdx++}`;
-    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 1 Count, Box 2 & Box 3 Retention (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c1}"></canvas></div></div></div>`;
+    const c1=`cRT_${chartIdx++}`, c1b=`cRT_${chartIdx++}`, c2=`cRT_${chartIdx++}`, c3=`cRT_${chartIdx++}`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 2 Retention (28-day, 8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c1}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 3 Retention (56-day, 12 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c1b}"></canvas></div></div></div>`;
     html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales & Avg Box 1 Discount (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c2}"></canvas></div></div></div>`;
     html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales, App Download % & Tail Mail % (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c3}"></canvas></div></div></div>`;
   }
@@ -1040,7 +1041,32 @@ function renderRetention() {
     const grpByWeek = {};
     for (const l of last8) { grpByWeek[l] = (weekGroups[l]||[]).filter(r=>regions.includes(gs(r,'⚙️ Region'))); }
 
-    // Chart 1: Box 1 Count (bars) + Box 2 Ret (red line) + Box 3 Ret (purple line)
+    // Determine maturity per week: ✅ = matured, ⏳ = almost
+    const weekMaturity = last8.map(l => {
+      const recs = grpByWeek[l]||[];
+      const ticks = recs.map(r=>gs(r,'✅ 28 day retention week Tick'));
+      return ticks.every(t=>t==='✅') ? 'matured' : 'almost';
+    });
+
+    // Bar colours: solid for matured, faded for almost
+    const barBgMatured = col.bud+'CC', barBgAlmost = col.bud+'35';
+    const barBorderMatured = col.bud, barBorderAlmost = col.bud+'77';
+    const barBgs = weekMaturity.map(m => m==='matured' ? barBgMatured : barBgAlmost);
+    const barBorders = weekMaturity.map(m => m==='matured' ? barBorderMatured : barBorderAlmost);
+
+    // Retention: split into matured (solid) and almost (dashed) segments
+    const ret2Matured = last8.map((l,i) => weekMaturity[i]==='matured' ? bRet2(grpByWeek[l]||[]) : null);
+    const ret2Almost = last8.map((l,i) => weekMaturity[i]==='almost' ? bRet2(grpByWeek[l]||[]) : null);
+    // Bridge: connect last matured to first almost
+    for (let i=1;i<last8.length;i++) { if(ret2Almost[i]!==null && ret2Matured[i-1]!==null) ret2Almost[i-1]=ret2Matured[i-1]; }
+    for (let i=0;i<last8.length-1;i++) { if(ret2Matured[i]!==null && ret2Almost[i+1]!==null) ret2Matured[i+1]=ret2Almost[i+1]; }
+
+    const ret3Matured = last8.map((l,i) => weekMaturity[i]==='matured' ? bRet3(grpByWeek[l]||[]) : null);
+    const ret3Almost = last8.map((l,i) => weekMaturity[i]==='almost' ? bRet3(grpByWeek[l]||[]) : null);
+    for (let i=1;i<last8.length;i++) { if(ret3Almost[i]!==null && ret3Matured[i-1]!==null) ret3Almost[i-1]=ret3Matured[i-1]; }
+    for (let i=0;i<last8.length-1;i++) { if(ret3Matured[i]!==null && ret3Almost[i+1]!==null) ret3Matured[i+1]=ret3Almost[i+1]; }
+
+    // Chart 1: Box 1 Count (bars with maturity shading) + Box 2 Ret + Box 3 Ret
     const c1 = `cRT_${chartIdx++}`;
     destroyChart(c1);
     const ctx1 = document.getElementById(c1);
@@ -1048,15 +1074,57 @@ function renderRetention() {
       STATE.charts[c1] = new Chart(ctx1, {
         type:'bar',
         data:{ labels:last8, datasets:[
-          { label:'Box 1 Count', data:last8.map(l=>bBox1(grpByWeek[l]||[])), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
-          { label:'Box 2 Retention', data:last8.map(l=>bRet2(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
-          { label:'Box 3 Retention', data:last8.map(l=>bRet3(grpByWeek[l]||[])), type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:5, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1' },
+          { label:'Box 1 Count (✅ matured)', data:last8.map(l=>bBox1(grpByWeek[l]||[])), backgroundColor:barBgs, borderColor:barBorders, borderWidth:1, yAxisID:'y' },
+          { label:'Box 2 Ret (✅ matured)', data:ret2Matured, type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1', spanGaps:true },
+          { label:'Box 2 Ret (⏳ almost)', data:ret2Almost, type:'line', borderColor:col.act+'88', backgroundColor:'transparent', borderWidth:3, borderDash:[6,4], pointRadius:5, pointBackgroundColor:col.act+'88', tension:.3, yAxisID:'y1', spanGaps:true },
         ]},
         options:{
           responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
           plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
-            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
-              formatter:function(v,c){return c.datasetIndex>=1?fmtP(v):fmt(v)},anchor:'end',align:'top'}, },
+            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||'#555'},
+              formatter:function(v,c){if(v===null) return ''; return c.datasetIndex>=1?fmtP(v):fmt(v)},anchor:'end',align:'top'}, },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,position:'left',title:{display:true,text:'Box 1 Count'},grid:{color:'rgba(0,0,0,.04)'}},
+            y1:{beginAtZero:true,position:'right',max:1,ticks:{callback:v=>fmtP(v)},title:{display:true,text:'Retention %'},grid:{display:false}}, },
+        }, plugins:[ChartDataLabels],
+      });
+    }
+
+    // Chart 1b: Box 3 Retention (56-day, 12 week rolling window)
+    const c1b = `cRT_${chartIdx++}`;
+    destroyChart(c1b);
+    const ctx1b = document.getElementById(c1b);
+    if(ctx1b) {
+      // Box 3 needs 12-week window (8-week maturity = longer lookback)
+      const last12 = uniqueLabels.slice(-12);
+      const grpByWeek12 = {};
+      for (const l of last12) { grpByWeek12[l] = (weekGroups[l]||[]).filter(r=>regions.includes(gs(r,'⚙️ Region'))); }
+
+      const wm12 = last12.map(l => {
+        const recs = grpByWeek12[l]||[];
+        const ticks = recs.map(r=>gs(r,'✅ 28 day retention week Tick'));
+        return ticks.every(t=>t==='✅') ? 'matured' : 'almost';
+      });
+      const barBgs12 = wm12.map(m => m==='matured' ? col.bud+'CC' : col.bud+'35');
+      const barBorders12 = wm12.map(m => m==='matured' ? col.bud : col.bud+'77');
+
+      const r3Mat = last12.map((l,i) => wm12[i]==='matured' ? bRet3(grpByWeek12[l]||[]) : null);
+      const r3Alm = last12.map((l,i) => wm12[i]==='almost' ? bRet3(grpByWeek12[l]||[]) : null);
+      // Bridge matured→almost transition
+      for (let i=1;i<last12.length;i++) { if(r3Alm[i]!==null && r3Mat[i-1]!==null) r3Alm[i-1]=r3Mat[i-1]; }
+      for (let i=0;i<last12.length-1;i++) { if(r3Mat[i]!==null && r3Alm[i+1]!==null) r3Mat[i+1]=r3Alm[i+1]; }
+
+      STATE.charts[c1b] = new Chart(ctx1b, {
+        type:'bar',
+        data:{ labels:last12, datasets:[
+          { label:'Box 1 Count', data:last12.map(l=>bBox1(grpByWeek12[l]||[])), backgroundColor:barBgs12, borderColor:barBorders12, borderWidth:1, yAxisID:'y' },
+          { label:'Box 3 Ret (✅ matured)', data:r3Mat, type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1', spanGaps:true },
+          { label:'Box 3 Ret (⏳ almost)', data:r3Alm, type:'line', borderColor:'#8E44AD88', backgroundColor:'transparent', borderWidth:3, borderDash:[6,4], pointRadius:5, pointBackgroundColor:'#8E44AD88', tension:.3, yAxisID:'y1', spanGaps:true },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+          plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||'#555'},
+              formatter:function(v,c){if(v===null) return ''; return c.datasetIndex>=1?fmtP(v):fmt(v)},anchor:'end',align:'top'}, },
           scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,position:'left',title:{display:true,text:'Box 1 Count'},grid:{color:'rgba(0,0,0,.04)'}},
             y1:{beginAtZero:true,position:'right',max:1,ticks:{callback:v=>fmtP(v)},title:{display:true,text:'Retention %'},grid:{display:false}}, },
         }, plugins:[ChartDataLabels],
