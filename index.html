@@ -197,8 +197,10 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <div class="section-hdr"><h2 id="summaryTitle">YTD Performance</h2><div class="line"></div></div>
     <div class="kpi-row" id="summaryKPIs"></div>
     <div class="chart-row">
-      <div class="chart-card"><h3>Sales by Period: Budget vs Actual vs Forecast</h3><div class="chart-wrap"><canvas id="cSalesPeriod"></canvas></div></div>
-      <div class="chart-card"><h3>CPA by Period</h3><div class="chart-wrap"><canvas id="cCPAPeriod"></canvas></div></div>
+      <div class="chart-card full"><h3>Sales: Budget vs Actual vs Forecast</h3><div class="chart-wrap"><canvas id="cSalesPeriod"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>CPA: Budget vs Actual</h3><div class="chart-wrap"><canvas id="cCPAPeriod"></canvas></div></div>
     </div>
     <div class="chart-row">
       <div class="chart-card full"><h3>Cumulative Spend: Budget vs Actual</h3><div class="chart-wrap"><canvas id="cSpendCum"></canvas></div></div>
@@ -213,12 +215,16 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
       <div class="brand-col"><div class="brand-col-hdr mro">🐱 Marro</div><div class="brand-col-body"><div class="kpi-row" id="mroKPIs"></div></div></div>
     </div>
     <div class="chart-row">
-      <div class="chart-card"><h3>🐶 Butternut Sales by Period</h3><div class="chart-wrap"><canvas id="cBbnSales"></canvas></div></div>
-      <div class="chart-card"><h3>🐱 Marro Sales by Period</h3><div class="chart-wrap"><canvas id="cMroSales"></canvas></div></div>
+      <div class="chart-card full"><h3>🐶 Butternut Sales</h3><div class="chart-wrap"><canvas id="cBbnSales"></canvas></div></div>
     </div>
     <div class="chart-row">
-      <div class="chart-card"><h3>🐶 Butternut CPA</h3><div class="chart-wrap"><canvas id="cBbnCPA"></canvas></div></div>
-      <div class="chart-card"><h3>🐱 Marro CPA</h3><div class="chart-wrap"><canvas id="cMroCPA"></canvas></div></div>
+      <div class="chart-card full"><h3>🐱 Marro Sales</h3><div class="chart-wrap"><canvas id="cMroSales"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>🐶 Butternut CPA</h3><div class="chart-wrap"><canvas id="cBbnCPA"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>🐱 Marro CPA</h3><div class="chart-wrap"><canvas id="cMroCPA"></canvas></div></div>
     </div>
     <div class="tbl-wrap"><h3>Period Detail</h3><div class="scroll"><table id="tblPeriod"></table></div></div>
   </div>
@@ -228,12 +234,16 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <div class="section-hdr"><h2>Regional Comparison</h2><div class="line"></div></div>
     <div class="region-grid" id="regionCards"></div>
     <div class="chart-row">
-      <div class="chart-card"><h3>Sales by Region</h3><div class="chart-wrap"><canvas id="cRegionSales"></canvas></div></div>
-      <div class="chart-card"><h3>CPA by Region</h3><div class="chart-wrap"><canvas id="cRegionCPA"></canvas></div></div>
+      <div class="chart-card full"><h3>Sales by Region</h3><div class="chart-wrap"><canvas id="cRegionSales"></canvas></div></div>
     </div>
     <div class="chart-row">
-      <div class="chart-card"><h3>SPS by Region</h3><div class="chart-wrap"><canvas id="cRegionSPS"></canvas></div></div>
-      <div class="chart-card"><h3>Team Size by Region</h3><div class="chart-wrap"><canvas id="cRegionTeam"></canvas></div></div>
+      <div class="chart-card full"><h3>CPA by Region</h3><div class="chart-wrap"><canvas id="cRegionCPA"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>SPS by Region</h3><div class="chart-wrap"><canvas id="cRegionSPS"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>Team Size by Region</h3><div class="chart-wrap"><canvas id="cRegionTeam"></canvas></div></div>
     </div>
   </div>
 
@@ -242,12 +252,16 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <div class="section-hdr"><h2>Team Size & Staffing</h2><div class="line"></div></div>
     <div class="kpi-row" id="teamKPIs"></div>
     <div class="chart-row">
-      <div class="chart-card"><h3>Team Size by Period</h3><div class="chart-wrap"><canvas id="cTeamPeriod"></canvas></div></div>
-      <div class="chart-card"><h3>SPS Trend by Period</h3><div class="chart-wrap"><canvas id="cSPSPeriod"></canvas></div></div>
+      <div class="chart-card full"><h3>Team Size by Period</h3><div class="chart-wrap"><canvas id="cTeamPeriod"></canvas></div></div>
     </div>
     <div class="chart-row">
-      <div class="chart-card"><h3>Staffing Performance (Actual / Forecast Shifts)</h3><div class="chart-wrap"><canvas id="cStaffPerf"></canvas></div></div>
-      <div class="chart-card"><h3>Shifts: Forecast vs Actual</h3><div class="chart-wrap"><canvas id="cShifts"></canvas></div></div>
+      <div class="chart-card full"><h3>SPS Trend</h3><div class="chart-wrap"><canvas id="cSPSPeriod"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>Staffing Performance (Actual / Forecast Shifts)</h3><div class="chart-wrap"><canvas id="cStaffPerf"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card full"><h3>Shifts: Forecast vs Actual</h3><div class="chart-wrap"><canvas id="cShifts"></canvas></div></div>
     </div>
   </div>
 </div>
