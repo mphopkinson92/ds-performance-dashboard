@@ -350,7 +350,7 @@ const Q_WEEKS = { Q1: WEEKS.slice(0,13), Q2: WEEKS.slice(13,26), Q3: WEEKS.slice
 
 // Check if a time bucket has actual data (not future/empty)
 function hasActualData(recs) {
-  return recs.some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0 || gv(r,'🔴🐶 Spend')>0 || gv(r,'🔴🐱 Spend')>0);
+  return recs.some(r => gv(r,'🔴🐶 Sales')>0 || gv(r,'🔴🐱 Sales')>0);
 }
 
 // Time axis helper — returns { field, labels, grouped } based on view + range
