@@ -979,8 +979,8 @@ function renderTeam() {
       STATE.charts[c2] = new Chart(ctx2, {
         type:'bar',
         data:{ labels, datasets:[
-          { label:'🔴 BA', data:labels.map(t=>sum(grpByTime[t]||[],'🔴 BA Team Size')), backgroundColor:'#1A5276CC', borderColor:'#1A5276', borderWidth:1, stack:'actual' },
           { label:'🔴 Rep', data:labels.map(t=>sum(grpByTime[t]||[],'🔴 Rep Team Size')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1, stack:'actual' },
+          { label:'🔴 BA', data:labels.map(t=>sum(grpByTime[t]||[],'🔴 BA Team Size')), backgroundColor:'#1A5276CC', borderColor:'#1A5276', borderWidth:1, stack:'actual' },
           { label:'🟡 Required', data:labels.map(t=>sum(grpByTime[t]||[],'🟡 Team Size Required')), backgroundColor:col.fcst+'88', borderColor:col.fcst, borderWidth:2, stack:'required' },
         ]},
         options:{
