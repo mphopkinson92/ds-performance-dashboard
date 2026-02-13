@@ -161,6 +161,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <select id="selPeriod" onchange="render()"><option value="all">All Periods</option></select>
     <select id="selWeek" onchange="render()"><option value="all">All Weeks</option></select>
     <select id="selRegionGroup" onchange="render()"><option value="all">All Region Groups</option></select>
+    <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
     <button class="refresh-btn" onclick="loadData()" title="Refresh data">↻</button>
   </div>
 </div>
@@ -324,6 +325,10 @@ function applyGlobalFilters(recs) {
     recs = recs.filter(r => regionsInGroup.includes(gs(r,'⚙️ Region')) || gs(r,'⚙️ Region Group') === rgSel);
   }
 
+  // Region filter
+  const regSel = document.getElementById('selRegion').value;
+  if (regSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region') === regSel);
+
   return recs;
 }
 
@@ -350,29 +355,12 @@ function hasActualData(recs) {
 // Time axis helper — returns { field, labels, grouped } based on view + range
 function getTimeAxis(recs) {
   const view = document.getElementById('selView').value;
-  const range = document.getElementById('selRange').value;
-
   const field = view === 'week' ? '⚙️ Week' : '⚙️ Period';
   const allLabels = view === 'week' ? WEEKS : PERIODS;
   const grouped = groupBy(recs, field);
 
-  // Filter by quarter range
-  let rangeLabels;
-  if (range === 'full') {
-    rangeLabels = allLabels;
-  } else if (Q_PERIODS[range]) {
-    rangeLabels = view === 'week' ? Q_WEEKS[range] : Q_PERIODS[range];
-  } else {
-    // YTD — only show labels that have actual data
-    rangeLabels = allLabels;
-  }
-
-  // Only show labels that exist in data AND (for YTD) have actual data — hide future empty weeks
-  const labels = rangeLabels.filter(t => {
-    if (!grouped[t]) return false;
-    if (range === 'ytd' || range === 'full') return hasActualData(grouped[t]);
-    return true; // For Q filters, show all weeks in range even if no actuals yet (budget still relevant)
-  });
+  // Show all labels that have data in the (already filtered) records
+  const labels = allLabels.filter(t => grouped[t] && grouped[t].length > 0);
 
   return { field, labels, grouped };
 }
@@ -548,6 +536,7 @@ const REG_IN_GROUP = {
   NORTH: ['MCR','NWC','SCOT'],
   'IE F2F Group': ['DUB','CRK','BF'],
 };
+const REG_EMOJI = { LDN:'🏙️', BRI:'⚓', EXE:'🌊', MCR:'🐝', NWC:'🏔️', SCOT:'🏴', DUB:'☘️', CRK:'🇮🇪', BF:'🍀' };
 
 function makeStackedChart(id, labels, datasets) {
   destroyChart(id);
@@ -576,7 +565,7 @@ function makeRegionLineChart(id, labels, regions, byTime, metricFn, fmtFn) {
   const ctx = document.getElementById(id);
   if(!ctx) return;
   const datasets = regions.map(reg => ({
-    label: reg,
+    label: `${REG_EMOJI[reg]||'📍'} ${reg}`,
     data: labels.map(t => {
       const recs = (byTime[t]||[]).filter(r=>gs(r,'⚙️ Region')===reg);
       return metricFn(recs);
@@ -613,10 +602,11 @@ function makeRegionLineChart(id, labels, regions, byTime, metricFn, fmtFn) {
 // ═══════════════════════════════════════════════════════════════
 
 // Red shades for stacking actual bars within each region group
+// Distinct colours per region — high contrast, not just red shades
 const RED_SHADES = {
-  SOUTH: { LDN:'#C0392B', BRI:'#E74C3C', EXE:'#F1948A' },
-  NORTH: { MCR:'#A93226', NWC:'#D4423B', SCOT:'#EC7063' },
-  'IE F2F Group': { DUB:'#B03A2E', CRK:'#D5524E', BF:'#F0B5AD' },
+  SOUTH: { LDN:'#C0392B', BRI:'#E67E22', EXE:'#F39C12' },
+  NORTH: { MCR:'#8E44AD', NWC:'#E74C3C', SCOT:'#D35400' },
+  'IE F2F Group': { DUB:'#27AE60', CRK:'#2ECC71', BF:'#16A085' },
 };
 
 function getFilteredRegionRecs() {
@@ -689,7 +679,7 @@ function renderSales() {
       stack: 'budget',
     };
     const actualDS = regions.map(reg => ({
-      label: `🔴 ${reg}`,
+      label: `${REG_EMOJI[reg]||'📍'} ${reg}`,
       data: labels.map(t => {
         const tRecs = (byTime[t]||[]).filter(r=>gs(r,'⚙️ Region')===reg);
         return bSales(tRecs,'🔴');
@@ -733,7 +723,7 @@ responsive:true, maintainAspectRatio:false,
     if(ctx2) {
       const showLbl = labels.length <= 13;
       const cpaDS = regions.map(reg => ({
-        label: reg,
+        label: `${REG_EMOJI[reg]||'📍'} ${reg}`,
         data: labels.map(t => {
           const tRecs = (byTime[t]||[]).filter(r=>gs(r,'⚙️ Region')===reg);
           return bCPA(tRecs,'🔴');
@@ -1111,6 +1101,13 @@ function populateFilters(records) {
   const selRG = document.getElementById('selRegionGroup');
   selRG.innerHTML = '<option value="all">All Region Groups</option>';
   REG_GROUP_ORDER.forEach(rg => { const o=document.createElement('option'); o.value=rg; o.textContent=rg; selRG.appendChild(o); });
+
+  // Regions
+  const regions = new Set(records.filter(r=>gs(r,'⚙️ Level')==='Region').map(r=>gs(r,'⚙️ Region')).filter(Boolean));
+  const allRegs = [...(REG_IN_GROUP.SOUTH||[]), ...(REG_IN_GROUP.NORTH||[]), ...(REG_IN_GROUP['IE F2F Group']||[])];
+  const selR = document.getElementById('selRegion');
+  selR.innerHTML = '<option value="all">All Regions</option>';
+  allRegs.filter(r=>regions.has(r)).forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=`${REG_EMOJI[r]||''} ${r}`; selR.appendChild(o); });
 }
 
 // ═══════════════════════════════════════════════════════════════
