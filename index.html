@@ -625,20 +625,45 @@ function makeRegionLineChart(id, labels, regions, byTime, metricFn, fmtFn) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// RENDER: SALES & CPA TAB (Region Group stacked, weekly)
+// RENDER: SALES & CPA TAB
+// Region group sections with KPI cards, Budget (single) vs
+// Actual (stacked by region in red shades), CPA lines, data labels
 // ═══════════════════════════════════════════════════════════════
-function renderSales() {
+
+// Red shades for stacking actual bars within each region group
+const RED_SHADES = {
+  SOUTH: { LDN:'#C0392B', BRI:'#E74C3C', EXE:'#F1948A' },
+  NORTH: { MCR:'#A93226', NWC:'#D4423B', SCOT:'#EC7063' },
+  'IE F2F Group': { DUB:'#B03A2E', CRK:'#D5524E', BF:'#F0B5AD' },
+};
+
+function getFilteredRegionRecs() {
   let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
-  // Apply time filter
   const timeSel = document.getElementById('selPeriod').value;
   const view = document.getElementById('selView').value;
+  const range = document.getElementById('selRange').value;
   if (timeSel !== 'all') {
     const tf = view==='week'?'⚙️ Week':'⚙️ Period';
     recs = recs.filter(r => gs(r,tf) === timeSel);
   }
-  const col = C[STATE.brand];
+  if (range !== 'full' && range !== 'ytd' && Q_PERIODS[range]) {
+    const allowed = new Set(Q_PERIODS[range]);
+    recs = recs.filter(r => allowed.has(gs(r,'⚙️ Period')));
+  }
+  if (range === 'ytd') recs = recs.filter(r => hasActualData([r]));
+  const regionSel = document.getElementById('selRegion').value;
+  if (regionSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region')===regionSel || gs(r,'⚙️ Region Group')===regionSel);
+  return recs;
+}
 
-  // KPIs for this tab
+function renderSales() {
+  const recs = getFilteredRegionRecs();
+  const col = C[STATE.brand];
+  const view = document.getElementById('selView').value;
+  const { labels, grouped: byTime } = getTimeAxis(recs);
+  const byRegion = groupBy(recs,'⚙️ Region');
+
+  // Overall KPIs
   const salesA=bSales(recs,'🔴'), salesB=bSales(recs,'🔵'), spendA=bSpend(recs,'🔴'), spendB=bSpend(recs,'🔵');
   const cpaA=salesA>0?spendA/salesA:0, cpaB=salesB>0?spendB/salesB:0;
   document.getElementById('salesKPIs').innerHTML =
@@ -646,47 +671,151 @@ function renderSales() {
     kpi('CPA',fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaB>0?(cpaA-cpaB)/cpaB:null,'🎯',col.bud,true) +
     kpi('Spend',fmtC(spendA),'🔵 Budget',fmtC(spendB),spendB>0?(spendA-spendB)/spendB:null,'💰',col.fcst,true);
 
-  // Build stacked charts per region group — weekly time axis
-  const { labels, grouped: byTime } = getTimeAxis(recs);
-  const byRegion = groupBy(recs,'⚙️ Region');
-
-  let chartsHtml = '';
+  // Build HTML for region group sections
+  let html = '';
   let chartIdx = 0;
   for (const grp of REG_GROUP_ORDER) {
     const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
     if (!regions.length) continue;
-    for (const m of ['Sales','CPA']) {
-      const cId = `cSR_${chartIdx++}`;
-      chartsHtml += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — ${m} (Stacked by Region)</h3><div class="chart-wrap"><canvas id="${cId}"></canvas></div></div></div>`;
-    }
-  }
-  document.getElementById('salesRegionCharts').innerHTML = chartsHtml;
+    const grpRecs = recs.filter(r => regions.includes(gs(r,'⚙️ Region')));
+    const gSalesA=bSales(grpRecs,'🔴'), gSalesB=bSales(grpRecs,'🔵'), gSpendA=bSpend(grpRecs,'🔴'), gSpendB=bSpend(grpRecs,'🔵');
+    const gCpaA=gSalesA>0?gSpendA/gSalesA:0, gCpaB=gSalesB>0?gSpendB/gSalesB:0;
 
+    html += `<div class="section-hdr"><h2>${grp}</h2><div class="line"></div></div>`;
+    // KPI cards per region group
+    html += `<div class="kpi-row">`;
+    html += kpi('Sales',fmt(gSalesA),'🔵 Budget',fmt(gSalesB),gSalesB>0?(gSalesA-gSalesB)/gSalesB:null,'📈',col.act);
+    html += kpi('CPA',fmtCPA(gCpaA),'🔵 Budget',fmtCPA(gCpaB),gCpaB>0?(gCpaA-gCpaB)/gCpaB:null,'🎯',col.bud,true);
+    // Per-region mini cards
+    for (const reg of regions) {
+      const rr = byRegion[reg]||[];
+      const rs=bSales(rr,'🔴'), rb=bSales(rr,'🔵');
+      html += kpi(reg,fmt(rs),'Budget',fmt(rb),rb>0?(rs-rb)/rb:null,'',RED_SHADES[grp]?.[reg]||col.act);
+    }
+    html += `</div>`;
+    // Chart canvases
+    const salesId=`cSR_${chartIdx++}`, cpaId=`cSR_${chartIdx++}`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales: Budget vs Actual by Region</h3><div class="chart-wrap"><canvas id="${salesId}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — CPA by Region</h3><div class="chart-wrap"><canvas id="${cpaId}"></canvas></div></div></div>`;
+  }
+  document.getElementById('salesRegionCharts').innerHTML = html;
+
+  // Render charts
   chartIdx = 0;
   for (const grp of REG_GROUP_ORDER) {
     const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
-    if (!regions.length) { chartIdx += 2; continue; }
+    if (!regions.length) continue;
+    const shades = RED_SHADES[grp]||{};
 
-    // Sales stacked
+    // SALES: Budget (single blue bar) + Actual stacked by region (red shades)
     const salesId = `cSR_${chartIdx++}`;
-    const salesDS = regions.map(reg => ({
-      label: reg,
+    const budgetDS = {
+      label:'🔵 Budget (Total)',
+      data: labels.map(t => {
+        const tRecs = (byTime[t]||[]).filter(r=>regions.includes(gs(r,'⚙️ Region')));
+        return bSales(tRecs,'🔵');
+      }),
+      backgroundColor: col.bud+'88',
+      borderColor: col.bud,
+      borderWidth: 2,
+      stack: 'budget',
+    };
+    const actualDS = regions.map(reg => ({
+      label: `🔴 ${reg}`,
       data: labels.map(t => {
         const tRecs = (byTime[t]||[]).filter(r=>gs(r,'⚙️ Region')===reg);
         return bSales(tRecs,'🔴');
       }),
-      backgroundColor: (REG_COLOURS[reg]||'#999')+'CC',
-      borderColor: REG_COLOURS[reg]||'#999',
+      backgroundColor: (shades[reg]||'#ED6961')+'DD',
+      borderColor: shades[reg]||'#ED6961',
       borderWidth: 1,
+      stack: 'actual',
     }));
-    makeStackedChart(salesId, labels, salesDS);
+    destroyChart(salesId);
+    const ctx1 = document.getElementById(salesId);
+    if(ctx1) {
+      const showLbl = labels.length <= 13;
+      STATE.charts[salesId] = new Chart(ctx1, {
+        type:'bar',
+        data:{ labels, datasets: [budgetDS, ...actualDS] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          interaction:{ intersect:false, mode:'index' },
+          plugins:{
+            legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
+            datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:12,weight:'700'},
+              color:function(c){return c.dataset.borderColor||'#555'},
+              formatter:v=>v>0?fmt(v):'',
+            },
+          },
+          scales:{
+            x:{ stacked:true, grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
+            y:{ stacked:true, beginAtZero:true, grid:{color:'rgba(0,0,0,.04)'} },
+          },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
 
-    // CPA line per region
+    // CPA: line per region with data labels
     const cpaId = `cSR_${chartIdx++}`;
-    makeRegionLineChart(cpaId, labels, regions, byTime, r=>bCPA(r,'🔴'), v=>fmtCPA(v));
+    destroyChart(cpaId);
+    const ctx2 = document.getElementById(cpaId);
+    if(ctx2) {
+      const showLbl = labels.length <= 13;
+      const cpaDS = regions.map(reg => ({
+        label: reg,
+        data: labels.map(t => {
+          const tRecs = (byTime[t]||[]).filter(r=>gs(r,'⚙️ Region')===reg);
+          return bCPA(tRecs,'🔴');
+        }),
+        borderColor: shades[reg]||REG_COLOURS[reg]||'#999',
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        pointRadius: labels.length>20?2:5,
+        pointBackgroundColor: shades[reg]||REG_COLOURS[reg]||'#999',
+        tension: .3,
+      }));
+      // Budget CPA line (dashed blue)
+      const budCPA = {
+        label: '🔵 Budget CPA',
+        data: labels.map(t => {
+          const tRecs = (byTime[t]||[]).filter(r=>regions.includes(gs(r,'⚙️ Region')));
+          return bCPA(tRecs,'🔵');
+        }),
+        borderColor: col.bud,
+        backgroundColor: 'transparent',
+        borderWidth: 3,
+        borderDash: [8,4],
+        pointRadius: labels.length>20?1:4,
+        pointBackgroundColor: col.bud,
+        tension: .3,
+      };
+      STATE.charts[cpaId] = new Chart(ctx2, {
+        type:'line',
+        data:{ labels, datasets: [budCPA, ...cpaDS] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          interaction:{ intersect:false, mode:'index' },
+          plugins:{
+            legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
+            datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:11,weight:'700'},
+              color:function(c){return c.dataset.borderColor||'#555'},
+              formatter:v=>v>0?fmtCPA(v):'',
+            },
+          },
+          scales:{
+            x:{ grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
+            y:{ beginAtZero:false, ticks:{callback:v=>fmtCPA(v)}, grid:{color:'rgba(0,0,0,.04)'} },
+          },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
   }
 
-  // Period detail table (uses time axis)
+  // Period detail table
+  const view = document.getElementById('selView').value;
   let h=`<thead><tr><th>${view==='week'?'Week':'Period'}</th><th>🔵🐶 Sales</th><th>🔴🐶 Actual</th><th>🐶 Var%</th><th>🔵🐱 Sales</th><th>🔴🐱 Actual</th><th>🐱 Var%</th><th>🔴🐶 CPA</th><th>🔴🐱 CPA</th></tr></thead><tbody>`;
   for(const t of labels) {
     const r=byTime[t]||[];
