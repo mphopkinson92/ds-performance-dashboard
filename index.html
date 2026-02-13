@@ -464,7 +464,7 @@ function makeBarChart(id, labels, datasets, opts={}) {
       interaction:{ intersect:false, mode:'index' },
       plugins:{
         legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
-        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:9,weight:'600'}, color:'#555', formatter: dlFmt },
+        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:13,weight:'700'}, color:function(ctx){return ctx.dataset.borderColor||ctx.dataset.backgroundColor||'#555'}, formatter: dlFmt },
       },
       scales:{
         x:{ grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
@@ -489,7 +489,7 @@ function makeLineChart(id, labels, datasets, opts={}) {
       interaction:{ intersect:false, mode:'index' },
       plugins:{
         legend:{ position:'bottom', labels:{ usePointStyle:true, padding:14, font:{size:11,weight:'600'} } },
-        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:9,weight:'600'}, color:'#555', formatter: dlFmt },
+        datalabels:{ display:showLbl, anchor:'end', align:'top', font:{size:13,weight:'700'}, color:function(ctx){return ctx.dataset.borderColor||'#555'}, formatter: dlFmt },
       },
       scales:{
         x:{ grid:{display:false}, ticks:{font:{size:labels.length>20?8:11}} },
