@@ -296,7 +296,7 @@ async function fetchRecords(token, year) {
 function gv(r,f){ const v=r.fields[f]; if(v==null) return 0; if(typeof v==='object'&&v.name) return v.name; if(typeof v==='string') return parseFloat(v.replace(/[£,]/g,''))||0; return Number(v)||0; }
 function gs(r,f){ const v=r.fields[f]; if(!v) return ''; if(typeof v==='object'&&v.name) return v.name; return String(v); }
 function sum(recs,f){ return recs.reduce((s,r)=>s+gv(r,f),0); }
-function avg(recs,f){ const vals=recs.map(r=>gv(r,f)).filter(v=>v); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0; }
+function avg(recs,f){ const vals=recs.map(r=>gv(r,f)).filter(v=>v!==0&&v!==null&&!isNaN(v)); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0; }
 function wAvg(recs,numF,denF){ const n=sum(recs,numF),d=sum(recs,denF); return d?n/d:0; }
 
 function fmt(n){ return n==null||isNaN(n)?'—':Math.round(n).toLocaleString('en-GB'); }
@@ -338,8 +338,8 @@ function applyGlobalFilters(recs) {
 }
 
 function getFiltered() {
-  // For Summary/Team tabs — use Market level
-  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Market');
+  // Use Region level for all tabs — aggregation happens in JS
+  let recs = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
   return applyGlobalFilters(recs);
 }
 
