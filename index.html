@@ -210,22 +210,11 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <div class="tbl-wrap"><h3>Period Detail</h3><div class="scroll"><table id="tblPeriod"></table></div></div>
   </div>
 
-  <!-- TAB: REGIONAL (summary totals, controlled by range filter) -->
+  <!-- TAB: REGIONAL (per region group, Budget vs Forecast vs Actual) -->
   <div id="tab-regions" class="tab-page">
     <div class="section-hdr"><h2>Regional Summary</h2><div class="line"></div></div>
-    <div class="region-grid" id="regionCards"></div>
-    <div class="chart-row">
-      <div class="chart-card full"><h3>Sales by Region</h3><div class="chart-wrap"><canvas id="cRegSumSales"></canvas></div></div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card full"><h3>CPA by Region</h3><div class="chart-wrap"><canvas id="cRegSumCPA"></canvas></div></div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card full"><h3>SPS by Region</h3><div class="chart-wrap"><canvas id="cRegSumSPS"></canvas></div></div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card full"><h3>Team Size by Region</h3><div class="chart-wrap"><canvas id="cRegSumTeam"></canvas></div></div>
-    </div>
+    <div class="kpi-row" id="regionOverallKPIs"></div>
+    <div id="regionGroupSections"></div>
   </div>
 
   <!-- TAB: TEAM -->
@@ -315,18 +304,19 @@ function applyGlobalFilters(recs) {
   const rgSel = document.getElementById('selRegionGroup').value;
   const range = document.getElementById('selRange').value;
 
+  // Period filter (apply first so YTD doesn't block it)
+  if (periodSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === periodSel);
+
+  // Week filter
+  if (weekSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Week') === weekSel);
+
   // Quarter filter
   if (range !== 'full' && range !== 'ytd' && Q_PERIODS[range]) {
     const allowed = new Set(Q_PERIODS[range]);
     recs = recs.filter(r => allowed.has(gs(r,'⚙️ Period')));
   }
-  if (range === 'ytd') recs = recs.filter(r => hasActualData([r]));
-
-  // Period filter
-  if (periodSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Period') === periodSel);
-
-  // Week filter
-  if (weekSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Week') === weekSel);
+  // YTD filter — only apply when no specific period/week is selected
+  if (range === 'ytd' && periodSel === 'all' && weekSel === 'all') recs = recs.filter(r => hasActualData([r]));
 
   // Region Group filter
   if (rgSel !== 'all') {
@@ -811,53 +801,116 @@ responsive:true, maintainAspectRatio:false,
 // RENDER: REGIONAL TAB (summary totals, controlled by filters)
 // ═══════════════════════════════════════════════════════════════
 function renderRegions() {
-  const recs = getFilteredRegionRecs();
+  // Get ALL region-level records (unfiltered by range) for full year budget/forecast
+  const allRegRecs = applyGlobalFilters(STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region'));
+  // Get only records with actual data for "actuals" metrics
+  const actualRecs = allRegRecs.filter(r => hasActualData([r]));
   const col = C[STATE.brand];
 
-  const byRegion = groupBy(recs,'⚙️ Region');
+  // Overall KPIs
+  const salesB = bSales(allRegRecs,'🔵'), salesF = bSales(allRegRecs,'🟡'), salesA = bSales(actualRecs,'🔴');
+  const spendB = bSpend(allRegRecs,'🔵'), spendA = bSpend(actualRecs,'🔴');
+  const cpaB = salesB>0?spendB/salesB:0, cpaA = salesA>0?spendA/salesA:0;
+  document.getElementById('regionOverallKPIs').innerHTML =
+    kpi('🔵 Budget Sales',fmt(salesB),'Full Year','',null,'📊',col.bud) +
+    kpi('🟡 Forecast Sales',fmt(salesF),'Full Year','',salesB>0?(salesF-salesB)/salesB:null,'🔮',col.fcst) +
+    kpi('🔴 Actual Sales (YTD)',fmt(salesA),'vs Budget',fmt(salesB),salesB>0?(salesA-salesB)/salesB:null,'📈',col.act) +
+    kpi('🔴 Actual CPA',fmtCPA(cpaA),'🔵 Budget CPA',fmtCPA(cpaB),cpaB>0?(cpaA-cpaB)/cpaB:null,'🎯',col.bud,true);
 
-  // Region cards — UK left, IE right
-  const allRegions = [...(REG_IN_GROUP.SOUTH||[]), ...(REG_IN_GROUP.NORTH||[]), ...(REG_IN_GROUP['IE F2F Group']||[])];
-  const activeRegions = allRegions.filter(r => byRegion[r]);
+  // Build per-region-group sections
+  let html = '';
+  let chartIdx = 0;
+  const byRegionAll = groupBy(allRegRecs,'⚙️ Region');
+  const byRegionAct = groupBy(actualRecs,'⚙️ Region');
 
-  let cards = '';
-  for(const reg of activeRegions) {
-    const r = byRegion[reg]||[];
-    const sales = bSales(r,'🔴'), salesB = bSales(r,'🔵');
-    const cpa = bCPA(r,'🔴'), sps = bSPS(r,'🔴');
-    const team = sum(r,'🔴 BA Team Size') + sum(r,'🔴 Rep Team Size');
-    const salesVar = salesB>0?(sales-salesB)/salesB:null;
-    cards += `<div class="region-card" style="border-left-color:${REG_COLOURS[reg]||col.bud}">
-      <div class="rname">${reg}</div>
-      <div class="rval">${fmt(sales)}</div>
-      ${salesVar!=null?`<div class="rsub" style="font-weight:700;color:${salesVar>=0?'var(--pos)':'var(--neg)'}">${fmtV(salesVar)} vs budget</div>`:''}
-      <div class="rsub">CPA: ${fmtCPA(cpa)} | SPS: ${sps.toFixed(1)}</div>
-      <div class="rsub">Team: ${fmt(team)} (BA ${sum(r,'🔴 BA Team Size')} + Rep ${sum(r,'🔴 Rep Team Size')})</div>
-    </div>`;
+  for (const grp of REG_GROUP_ORDER) {
+    const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegionAll[r]);
+    if (!regions.length) continue;
+
+    html += `<div class="section-hdr"><h2>${grp}</h2><div class="line"></div></div>`;
+
+    // KPI cards per region
+    html += `<div class="kpi-row">`;
+    for (const reg of regions) {
+      const rAll = byRegionAll[reg]||[], rAct = byRegionAct[reg]||[];
+      const rBud = bSales(rAll,'🔵'), rFcst = bSales(rAll,'🟡'), rActS = bSales(rAct,'🔴');
+      const rCpaA = bCPA(rAct,'🔴'), rCpaB = bCPA(rAll,'🔵');
+      const rSps = bSPS(rAct,'🔴');
+      const rTeam = avg(rAct,'🔴 Total Team Size');
+      html += `<div class="kpi" style="min-width:220px"><div class="stripe" style="background:${REG_COLOURS[reg]||col.act}"></div>
+        <div class="label">${reg}</div>
+        <div style="display:flex;gap:16px;margin-top:6px">
+          <div><div style="font-size:10px;color:var(--text2)">🔵 Budget</div><div style="font-size:16px;font-weight:800">${fmt(rBud)}</div></div>
+          <div><div style="font-size:10px;color:var(--text2)">🟡 Forecast</div><div style="font-size:16px;font-weight:800;color:${col.fcst}">${fmt(rFcst)}</div></div>
+          <div><div style="font-size:10px;color:var(--text2)">🔴 Actual</div><div style="font-size:16px;font-weight:800;color:${col.act}">${fmt(rActS)}</div></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--text2)">CPA: ${fmtCPA(rCpaA)} (Bdg: ${fmtCPA(rCpaB)}) | SPS: ${rSps.toFixed(1)} | Team: ${fmt(rTeam)}</div>
+        ${rBud>0?`<div class="var ${rActS>=rBud?'pos':'neg'}" style="margin-top:3px">${fmtV((rActS-rBud)/rBud)} actual vs budget</div>`:''}
+      </div>`;
+    }
+    html += `</div>`;
+
+    // Charts: Sales comparison and CPA comparison
+    const cSales = `cRS_${chartIdx++}`, cCPA = `cRS_${chartIdx++}`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales: Budget vs Forecast vs Actual</h3><div class="chart-wrap"><canvas id="${cSales}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — CPA: Budget vs Actual</h3><div class="chart-wrap"><canvas id="${cCPA}"></canvas></div></div></div>`;
   }
-  document.getElementById('regionCards').innerHTML = cards;
 
-  // Summary bar charts — totals per region
-  makeBarChart('cRegSumSales', activeRegions, [
-    { label:'🔵 Budget', data:activeRegions.map(r=>bSales(byRegion[r]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
-    { label:'🔴 Actual', data:activeRegions.map(r=>bSales(byRegion[r]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
-  ]);
+  document.getElementById('regionGroupSections').innerHTML = html;
 
-  makeBarChart('cRegSumCPA', activeRegions, [
-    { label:'🔵 Budget CPA', data:activeRegions.map(r=>bCPA(byRegion[r]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
-    { label:'🔴 Actual CPA', data:activeRegions.map(r=>bCPA(byRegion[r]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
-  ], { yFmt: v=>fmtCPA(v) });
+  // Render charts
+  chartIdx = 0;
+  for (const grp of REG_GROUP_ORDER) {
+    const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegionAll[r]);
+    if (!regions.length) continue;
 
-  makeBarChart('cRegSumSPS', activeRegions, [
-    { label:'🔵 Budget SPS', data:activeRegions.map(r=>bSPS(byRegion[r]||[],'🔵')), backgroundColor:col.bud+'66', borderColor:col.bud, borderWidth:1 },
-    { label:'🔴 Actual SPS', data:activeRegions.map(r=>bSPS(byRegion[r]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:1 },
-  ], { yFmt: v=>v.toFixed(1) });
+    // Sales: grouped bars per region — Budget, Forecast, Actual
+    const cSales = `cRS_${chartIdx++}`;
+    destroyChart(cSales);
+    const ctx1 = document.getElementById(cSales);
+    if (ctx1) {
+      STATE.charts[cSales] = new Chart(ctx1, {
+        type:'bar',
+        data:{ labels:regions, datasets:[
+          { label:'🔵 Budget', data:regions.map(r=>bSales(byRegionAll[r]||[],'🔵')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:2 },
+          { label:'🟡 Forecast', data:regions.map(r=>bSales(byRegionAll[r]||[],'🟡')), backgroundColor:col.fcst+'88', borderColor:col.fcst, borderWidth:2 },
+          { label:'🔴 Actual (YTD)', data:regions.map(r=>bSales(byRegionAct[r]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          layout:{ padding:{ top:30 } },
+          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
+            datalabels:{ display:true, anchor:'end', align:'top', font:{size:13,weight:'700'}, color:function(c){return c.dataset.borderColor||'#555'}, formatter:v=>v>0?fmt(v):'' },
+          },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.04)'}} },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
 
-  // Team stacked BA/Rep
-  makeStackedChart('cRegSumTeam', activeRegions, [
-    { label:'BA', data:activeRegions.map(r=>sum(byRegion[r]||[],'🔴 BA Team Size')), backgroundColor:'#10507CAA', borderColor:'#10507C', borderWidth:1 },
-    { label:'Rep', data:activeRegions.map(r=>sum(byRegion[r]||[],'🔴 Rep Team Size')), backgroundColor:'#ED6961AA', borderColor:'#ED6961', borderWidth:1 },
-  ]);
+    // CPA: grouped bars per region — Budget vs Actual
+    const cCPA = `cRS_${chartIdx++}`;
+    destroyChart(cCPA);
+    const ctx2 = document.getElementById(cCPA);
+    if (ctx2) {
+      STATE.charts[cCPA] = new Chart(ctx2, {
+        type:'bar',
+        data:{ labels:regions, datasets:[
+          { label:'🔵 Budget CPA', data:regions.map(r=>bCPA(byRegionAll[r]||[],'🔵')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:2 },
+          { label:'🔴 Actual CPA', data:regions.map(r=>bCPA(byRegionAct[r]||[],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          layout:{ padding:{ top:30 } },
+          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
+            datalabels:{ display:true, anchor:'end', align:'top', font:{size:13,weight:'700'}, color:function(c){return c.dataset.borderColor||'#555'}, formatter:v=>v>0?fmtCPA(v):'' },
+          },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,ticks:{callback:v=>fmtCPA(v)},grid:{color:'rgba(0,0,0,.04)'}} },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -877,17 +930,17 @@ function renderTeam() {
   const { labels, grouped: byTime } = getTimeAxis(recs);
   const byRegion = groupBy(recs,'⚙️ Region');
 
-  // Overall KPIs
-  const totalActual = sum(recs,'🔴 Total Team Size'), totalRequired = sum(recs,'🟡 Team Size Required');
-  const totalBA = sum(recs,'🔴 BA Team Size'), totalRep = sum(recs,'🔴 Rep Team Size');
-  const budgetRep = sum(recs,'🔵 Rep Team Size p/w');
+  // Overall KPIs — team size is avg per week, not summed
+  const avgActual = avg(recs,'🔴 Total Team Size'), avgRequired = avg(recs,'🟡 Team Size Required');
+  const avgBA = avg(recs,'🔴 BA Team Size'), avgRep = avg(recs,'🔴 Rep Team Size');
+  const avgBudgetRep = avg(recs,'🔵 Rep Team Size p/w');
   const avgStaff = avg(recs,'🔴 Staffing Performance');
-  const teamVar = totalRequired>0?(totalActual-totalRequired)/totalRequired:null;
+  const teamVar = avgRequired>0?(avgActual-avgRequired)/avgRequired:null;
 
   document.getElementById('teamKPIs').innerHTML =
-    kpi('Actual Team',fmt(totalActual),'🟡 Required',fmt(totalRequired),teamVar,'👥',col.act) +
-    kpi('BA Team',fmt(totalBA),'Brand Ambassadors','',null,'🎪',col.bud) +
-    kpi('Rep Team',fmt(totalRep),'🔵 Budget Reps',fmt(budgetRep),budgetRep>0?(totalRep-budgetRep)/budgetRep:null,'🏷️',col.fcst) +
+    kpi('Avg Team Size',fmt(avgActual),'🟡 Required',fmt(avgRequired),teamVar,'👥',col.act) +
+    kpi('Avg BA',fmt(avgBA),'Brand Ambassadors','',null,'🎪',col.bud) +
+    kpi('Avg Reps',fmt(avgRep),'🔵 Budget Reps',fmt(avgBudgetRep),avgBudgetRep>0?(avgRep-avgBudgetRep)/avgBudgetRep:null,'🏷️',col.fcst) +
     kpi('Staffing %',fmtP(avgStaff),'Actual / Forecast','',avgStaff>0?avgStaff-1:null,'⚡',avgStaff>=0.95?'var(--pos)':'var(--neg)');
 
   // Build per-region-group sections (same structure as Sales & CPA)
@@ -898,23 +951,23 @@ function renderTeam() {
     const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
     if (!regions.length) continue;
     const grpRecs = recs.filter(r => regions.includes(gs(r,'⚙️ Region')));
-    const gActual = sum(grpRecs,'🔴 Total Team Size'), gRequired = sum(grpRecs,'🟡 Team Size Required');
-    const gBA = sum(grpRecs,'🔴 BA Team Size'), gRep = sum(grpRecs,'🔴 Rep Team Size');
-    const gBudgetRep = sum(grpRecs,'🔵 Rep Team Size p/w');
+    const gActual = avg(grpRecs,'🔴 Total Team Size'), gRequired = avg(grpRecs,'🟡 Team Size Required');
+    const gBA = avg(grpRecs,'🔴 BA Team Size'), gRep = avg(grpRecs,'🔴 Rep Team Size');
+    const gBudgetRep = avg(grpRecs,'🔵 Rep Team Size p/w');
     const shades = TEAM_SHADES[grp]||{};
 
     // Section header
     html += `<div class="section-hdr"><h2>${grp}</h2><div class="line"></div></div>`;
 
-    // KPI cards
+    // KPI cards — averages per week
     html += `<div class="kpi-row">`;
-    html += kpi('Actual Team',fmt(gActual),'🟡 Required',fmt(gRequired),gRequired>0?(gActual-gRequired)/gRequired:null,'👥',col.act);
-    html += kpi('BA',fmt(gBA),'Rep',fmt(gRep),null,'🎪',col.bud);
+    html += kpi('Avg Team',fmt(gActual),'🟡 Required',fmt(gRequired),gRequired>0?(gActual-gRequired)/gRequired:null,'👥',col.act);
+    html += kpi('Avg BA',fmt(gBA),'Avg Rep',fmt(gRep),null,'🎪',col.bud);
     html += kpi('Budget Reps',fmt(gBudgetRep),'Actual Reps',fmt(gRep),gBudgetRep>0?(gRep-gBudgetRep)/gBudgetRep:null,'🏷️',col.fcst);
     // Per-region mini cards
     for (const reg of regions) {
       const rr = byRegion[reg]||[];
-      const rt = sum(rr,'🔴 Total Team Size'), rq = sum(rr,'🟡 Team Size Required');
+      const rt = avg(rr,'🔴 Total Team Size'), rq = avg(rr,'🟡 Team Size Required');
       html += kpi(reg,fmt(rt),'Required',fmt(rq),rq>0?(rt-rq)/rq:null,'',shades[reg]||col.act);
     }
     html += `</div>`;
