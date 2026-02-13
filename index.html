@@ -271,7 +271,8 @@ async function fetchRecords(token, year) {
     '🔴 Shifts','🟡 Shifts','🔴 Shift Capacity','🔴 Staffing Performance','🔴 Rep Shifts Required',
     '🐶 Sales Var vs Budget','🐶 Sales Var % vs Budget','🐱 Sales Var vs Budget','🐱 Sales Var % vs Budget',
     '🐶 Spend Var vs Budget','🐱 Spend Var vs Budget',
-    '🔴🐶 Box 2 Retention','🔴🐱 Box 2 Retention','🔴🐶 Box 1 Count','🔴🐱 Box 1 Count',
+    '🔴🐶 Box 2 Retention','🔴🐱 Box 2 Retention','🔴🐶 Box 3 Retention','🔴🐱 Box 3 Retention',
+    '🔴🐶 Box 1 Count','🔴🐱 Box 1 Count',
     '🔴🐶 Box 1 Average Discount','🔴🐱 Box 1 Average Discount',
     '🔴 App Download %','🔴 Tail Mail %','✅ 28 day retention week Tick',
   ];
@@ -302,7 +303,7 @@ function wAvg(recs,numF,denF){ const n=sum(recs,numF),d=sum(recs,denF); return d
 
 function fmt(n){ return n==null||isNaN(n)?'—':Math.round(n).toLocaleString('en-GB'); }
 function fmtC(n){ return n==null||isNaN(n)?'—':'£'+Math.round(n).toLocaleString('en-GB'); }
-function fmtCPA(n){ return !n||isNaN(n)?'—':'£'+n.toFixed(2); }
+function fmtCPA(n){ return !n||isNaN(n)?'—':'£'+Math.round(n).toLocaleString('en-GB'); }
 function fmtP(n){ return n==null||isNaN(n)?'—':(n*100).toFixed(1)+'%'; }
 function fmtV(n){ if(n==null||isNaN(n)) return '—'; return (n>=0?'+':'')+((n*100).toFixed(1))+'%'; }
 
@@ -935,78 +936,67 @@ function renderRegions() {
 // RENDER: RETENTION TAB
 // ═══════════════════════════════════════════════════════════════
 function renderRetention() {
-  // Combine 2025 + 2026 region-level records for retention (need history)
+  // Combine 2025 + 2026 region-level records
   const all2025 = (STATE.records2025||[]).filter(r => gs(r,'⚙️ Level') === 'Region');
   const all2026 = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
   let allRecs = [...all2025, ...all2026];
 
-  // Filter to only ✅ (matured) and ⏳ (almost matured) retention records
-  allRecs = allRecs.filter(r => {
-    const tick = gs(r,'✅ 28 day retention week Tick');
-    return tick === '✅' || tick === '⏳';
-  });
+  // Filter to ✅ (matured) and ⏳ (almost matured)
+  allRecs = allRecs.filter(r => { const t=gs(r,'✅ 28 day retention week Tick'); return t==='✅'||t==='⏳'; });
 
-  // Apply region group + region filters (but NOT period/week/range — retention needs its own time window)
+  // Apply region group + region filters
   const rgSel = document.getElementById('selRegionGroup').value;
   const regSel = document.getElementById('selRegion').value;
-  if (rgSel !== 'all') {
-    const regionsInGroup = REG_IN_GROUP[rgSel] || [];
-    allRecs = allRecs.filter(r => regionsInGroup.includes(gs(r,'⚙️ Region')) || gs(r,'⚙️ Region Group') === rgSel);
-  }
+  if (rgSel !== 'all') { const rg=REG_IN_GROUP[rgSel]||[]; allRecs=allRecs.filter(r=>rg.includes(gs(r,'⚙️ Region'))||gs(r,'⚙️ Region Group')===rgSel); }
   if (regSel !== 'all') allRecs = allRecs.filter(r => gs(r,'⚙️ Region') === regSel);
 
   const col = C[STATE.brand];
   const byRegion = groupBy(allRecs,'⚙️ Region');
 
-  // Brand-aware helpers for retention fields
-  function bRet(recs) {
-    const b = STATE.brand;
-    if(b==='butternut') return avg(recs,'🔴🐶 Box 2 Retention');
-    if(b==='marro') return avg(recs,'🔴🐱 Box 2 Retention');
-    return (avg(recs,'🔴🐶 Box 2 Retention') + avg(recs,'🔴🐱 Box 2 Retention')) / 2;
-  }
-  function bBox1(recs) {
-    const b = STATE.brand;
-    if(b==='butternut') return sum(recs,'🔴🐶 Box 1 Count');
-    if(b==='marro') return sum(recs,'🔴🐱 Box 1 Count');
-    return sum(recs,'🔴🐶 Box 1 Count') + sum(recs,'🔴🐱 Box 1 Count');
-  }
-  function bDisc(recs) {
-    const b = STATE.brand;
-    if(b==='butternut') return avg(recs,'🔴🐶 Box 1 Average Discount');
-    if(b==='marro') return avg(recs,'🔴🐱 Box 1 Average Discount');
-    return (avg(recs,'🔴🐶 Box 1 Average Discount') + avg(recs,'🔴🐱 Box 1 Average Discount')) / 2;
-  }
+  // Brand-aware helpers
+  function bRet2(recs){ const b=STATE.brand; if(b==='butternut') return avg(recs,'🔴🐶 Box 2 Retention'); if(b==='marro') return avg(recs,'🔴🐱 Box 2 Retention'); return (avg(recs,'🔴🐶 Box 2 Retention')+avg(recs,'🔴🐱 Box 2 Retention'))/2; }
+  function bRet3(recs){ const b=STATE.brand; if(b==='butternut') return avg(recs,'🔴🐶 Box 3 Retention'); if(b==='marro') return avg(recs,'🔴🐱 Box 3 Retention'); return (avg(recs,'🔴🐶 Box 3 Retention')+avg(recs,'🔴🐱 Box 3 Retention'))/2; }
+  function bBox1(recs){ const b=STATE.brand; if(b==='butternut') return sum(recs,'🔴🐶 Box 1 Count'); if(b==='marro') return sum(recs,'🔴🐱 Box 1 Count'); return sum(recs,'🔴🐶 Box 1 Count')+sum(recs,'🔴🐱 Box 1 Count'); }
+  function bDisc(recs){ const b=STATE.brand; if(b==='butternut') return avg(recs,'🔴🐶 Box 1 Average Discount'); if(b==='marro') return avg(recs,'🔴🐱 Box 1 Average Discount'); return (avg(recs,'🔴🐶 Box 1 Average Discount')+avg(recs,'🔴🐱 Box 1 Average Discount'))/2; }
 
-  // Overall KPIs
-  const avgRet = bRet(allRecs), avgDisc = bDisc(allRecs);
-  const avgApp = avg(allRecs,'🔴 App Download %'), avgTM = avg(allRecs,'🔴 Tail Mail %');
-  document.getElementById('retentionKPIs').innerHTML =
-    kpi('Box 2 Retention',fmtP(avgRet),'28-day matured','',null,'📦',col.act) +
-    kpi('Avg Box 1 Discount',fmtP(avgDisc),'Weighted avg','',null,'🏷️',col.fcst) +
-    kpi('App Download %',fmtP(avgApp),'Average','',null,'📱',col.bud) +
-    kpi('Tail Mail %',fmtP(avgTM),'Average','',null,'📬','#27AE60');
-
-  // Time axis for retention — always by week, sorted across years
-  function weekSort(a,b) {
-    const ya=gs(a,'⚙️ Year'), yb=gs(b,'⚙️ Year');
-    if(ya!==yb) return ya<yb?-1:1;
-    return (W_ORD[gs(a,'⚙️ Week')]||0) - (W_ORD[gs(b,'⚙️ Week')]||0);
-  }
-  allRecs.sort(weekSort);
-  // Create combined week labels (e.g. "W48'25", "W1'26")
-  const weekLabels = [];
+  // Sort all records chronologically and build week labels
+  allRecs.sort((a,b) => { const ya=gs(a,'⚙️ Year'),yb=gs(b,'⚙️ Year'); if(ya!==yb) return ya<yb?-1:1; return (W_ORD[gs(a,'⚙️ Week')]||0)-(W_ORD[gs(b,'⚙️ Week')]||0); });
   const weekGroups = {};
+  const orderedLabels = [];
   for (const r of allRecs) {
-    const yr = gs(r,'⚙️ Year'), wk = gs(r,'⚙️ Week');
-    const label = `${wk}'${String(yr).slice(-2)}`;
-    if (!weekGroups[label]) { weekGroups[label] = []; weekLabels.push(label); }
-    // Deduplicate labels
-    if (weekLabels[weekLabels.length-1] !== label && !weekLabels.includes(label)) weekLabels.push(label);
+    const label = `${gs(r,'⚙️ Week')}'${String(gs(r,'⚙️ Year')).slice(-2)}`;
+    if (!weekGroups[label]) { weekGroups[label]=[]; orderedLabels.push(label); }
     weekGroups[label].push(r);
   }
-  // Deduplicate
-  const uniqueLabels = [...new Set(weekLabels)];
+  const uniqueLabels = [...new Set(orderedLabels)];
+
+  // Rolling 8-week window — take last 8 labels
+  const last8 = uniqueLabels.slice(-8);
+  const prevLabel = uniqueLabels.length >= 9 ? uniqueLabels[uniqueLabels.length - 9] : null;
+
+  // Latest week and previous week for KPI tiles
+  const latestLabel = last8[last8.length - 1];
+  const prevWeekLabel = last8.length >= 2 ? last8[last8.length - 2] : null;
+  const latestRecs = weekGroups[latestLabel] || [];
+  const prevRecs = prevWeekLabel ? (weekGroups[prevWeekLabel]||[]) : [];
+
+  // KPIs — latest week with WoW change
+  const lRet2=bRet2(latestRecs), pRet2=bRet2(prevRecs);
+  const lRet3=bRet3(latestRecs), pRet3=bRet3(prevRecs);
+  const lDisc=bDisc(latestRecs), pDisc=bDisc(prevRecs);
+  const lApp=avg(latestRecs,'🔴 App Download %'), pApp=avg(prevRecs,'🔴 App Download %');
+  const lTM=avg(latestRecs,'🔴 Tail Mail %'), pTM=avg(prevRecs,'🔴 Tail Mail %');
+  const lBox1=bBox1(latestRecs);
+
+  function wowVar(curr,prev){ return prev>0?(curr-prev)/prev:null; }
+
+  document.getElementById('retentionKPIs').innerHTML =
+    kpi(`Box 2 Ret (${latestLabel})`,fmtP(lRet2),'Prev week',fmtP(pRet2),pRet2?lRet2-pRet2:null,'📦',col.act) +
+    kpi(`Box 3 Ret (${latestLabel})`,fmtP(lRet3),'Prev week',fmtP(pRet3),pRet3?lRet3-pRet3:null,'📦','#8E44AD') +
+    kpi(`Box 1 Disc (${latestLabel})`,fmtP(lDisc),'Prev week',fmtP(pDisc),pDisc?lDisc-pDisc:null,'🏷️',col.fcst,true) +
+    kpi(`App DL (${latestLabel})`,fmtP(lApp),'Prev week',fmtP(pApp),pApp?lApp-pApp:null,'📱',col.bud) +
+    kpi(`Tail Mail (${latestLabel})`,fmtP(lTM),'Prev week',fmtP(pTM),pTM?lTM-pTM:null,'📬','#27AE60') +
+    kpi(`Box 1 Count (${latestLabel})`,fmt(lBox1),'Volume','',null,'📊',col.bud);
 
   // Build per region group
   let html = '';
@@ -1018,63 +1008,58 @@ function renderRetention() {
 
     html += `<div class="section-hdr"><h2>${grp}</h2><div class="line"></div></div>`;
 
-    // KPIs per region
+    // Region KPI cards — latest week
     html += `<div class="kpi-row">`;
     for (const reg of regions) {
-      const rr = byRegion[reg]||[];
+      const regLatest = latestRecs.filter(r=>gs(r,'⚙️ Region')===reg);
+      const regPrev = prevRecs.filter(r=>gs(r,'⚙️ Region')===reg);
+      const rR2=bRet2(regLatest), rR2p=bRet2(regPrev);
+      const rR3=bRet3(regLatest);
+      const rD=bDisc(regLatest);
       html += `<div class="kpi" style="min-width:200px"><div class="stripe" style="background:${REG_COLOURS[reg]||col.act}"></div>
-        <div class="label">${REG_EMOJI[reg]||''} ${reg}</div>
-        <div style="font-size:18px;font-weight:800;margin-top:4px">${fmtP(bRet(rr))} ret</div>
-        <div style="font-size:11px;color:var(--text2)">Disc: ${fmtP(bDisc(rr))} | App: ${fmtP(avg(rr,'🔴 App Download %'))}</div>
+        <div class="label">${REG_EMOJI[reg]||''} ${reg} (${latestLabel})</div>
+        <div style="font-size:16px;font-weight:800;margin-top:4px">B2: ${fmtP(rR2)} | B3: ${fmtP(rR3)}</div>
+        <div style="font-size:11px;color:var(--text2)">Disc: ${fmtP(rD)} | App: ${fmtP(avg(regLatest,'🔴 App Download %'))}</div>
+        ${rR2p?`<div class="var ${rR2>=rR2p?'pos':'neg'}" style="margin-top:2px">B2 WoW: ${fmtV(rR2p?(rR2-rR2p)/rR2p:0)}</div>`:''}
       </div>`;
     }
     html += `</div>`;
 
     const c1=`cRT_${chartIdx++}`, c2=`cRT_${chartIdx++}`, c3=`cRT_${chartIdx++}`;
-    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 1 Count & Box 2 Retention</h3><div class="chart-wrap"><canvas id="${c1}"></canvas></div></div></div>`;
-    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales & Avg Box 1 Discount</h3><div class="chart-wrap"><canvas id="${c2}"></canvas></div></div></div>`;
-    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales, App Download % & Tail Mail %</h3><div class="chart-wrap"><canvas id="${c3}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 1 Count, Box 2 & Box 3 Retention (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c1}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales & Avg Box 1 Discount (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c2}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales, App Download % & Tail Mail % (8 Week Rolling)</h3><div class="chart-wrap"><canvas id="${c3}"></canvas></div></div></div>`;
   }
   document.getElementById('retentionCharts').innerHTML = html;
 
-  // Render charts
+  // Render charts — 8 week window
   chartIdx = 0;
   for (const grp of REG_GROUP_ORDER) {
     const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
     if (!regions.length) continue;
-    const grpRecs = allRecs.filter(r => regions.includes(gs(r,'⚙️ Region')));
     const grpByWeek = {};
-    for (const label of uniqueLabels) {
-      grpByWeek[label] = (weekGroups[label]||[]).filter(r => regions.includes(gs(r,'⚙️ Region')));
-    }
-    const activeLabels = uniqueLabels.filter(l => grpByWeek[l] && grpByWeek[l].length > 0);
-    const showLbl = activeLabels.length <= 15;
+    for (const l of last8) { grpByWeek[l] = (weekGroups[l]||[]).filter(r=>regions.includes(gs(r,'⚙️ Region'))); }
 
-    // Chart 1: Box 1 Count (bars) + Box 2 Retention (line)
+    // Chart 1: Box 1 Count (bars) + Box 2 Ret (red line) + Box 3 Ret (purple line)
     const c1 = `cRT_${chartIdx++}`;
     destroyChart(c1);
     const ctx1 = document.getElementById(c1);
     if(ctx1) {
       STATE.charts[c1] = new Chart(ctx1, {
         type:'bar',
-        data:{ labels:activeLabels, datasets:[
-          { label:'Box 1 Count', data:activeLabels.map(l=>bBox1(grpByWeek[l]||[])), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
-          { label:'Box 2 Retention', data:activeLabels.map(l=>bRet(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
+        data:{ labels:last8, datasets:[
+          { label:'Box 1 Count', data:last8.map(l=>bBox1(grpByWeek[l]||[])), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'Box 2 Retention', data:last8.map(l=>bRet2(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
+          { label:'Box 3 Retention', data:last8.map(l=>bRet3(grpByWeek[l]||[])), type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:5, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1' },
         ]},
         options:{
-          responsive:true, maintainAspectRatio:false,
-          layout:{ padding:{ top:30 } },
-          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
-            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
-              formatter:function(v,c){return c.datasetIndex===1?fmtP(v):fmt(v)}, anchor:'end', align:'top' },
-          },
-          scales:{
-            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
-            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Box 1 Count'}, grid:{color:'rgba(0,0,0,.04)'} },
-            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'Retention %'}, grid:{display:false} },
-          },
-        },
-        plugins:[ChartDataLabels],
+          responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+          plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex>=1?fmtP(v):fmt(v)},anchor:'end',align:'top'}, },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,position:'left',title:{display:true,text:'Box 1 Count'},grid:{color:'rgba(0,0,0,.04)'}},
+            y1:{beginAtZero:true,position:'right',max:1,ticks:{callback:v=>fmtP(v)},title:{display:true,text:'Retention %'},grid:{display:false}}, },
+        }, plugins:[ChartDataLabels],
       });
     }
 
@@ -1085,53 +1070,41 @@ function renderRetention() {
     if(ctx2) {
       STATE.charts[c2] = new Chart(ctx2, {
         type:'bar',
-        data:{ labels:activeLabels, datasets:[
-          { label:'Sales', data:activeLabels.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
-          { label:'Avg B1 Discount', data:activeLabels.map(l=>bDisc(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
+        data:{ labels:last8, datasets:[
+          { label:'Sales', data:last8.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'Avg B1 Discount', data:last8.map(l=>bDisc(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
         ]},
         options:{
-          responsive:true, maintainAspectRatio:false,
-          layout:{ padding:{ top:30 } },
-          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
-            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
-              formatter:function(v,c){return c.datasetIndex===1?fmtP(v):fmt(v)}, anchor:'end', align:'top' },
-          },
-          scales:{
-            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
-            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Sales'}, grid:{color:'rgba(0,0,0,.04)'} },
-            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'Discount %'}, grid:{display:false} },
-          },
-        },
-        plugins:[ChartDataLabels],
+          responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+          plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex===1?fmtP(v):fmt(v)},anchor:'end',align:'top'}, },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,position:'left',title:{display:true,text:'Sales'},grid:{color:'rgba(0,0,0,.04)'}},
+            y1:{beginAtZero:true,position:'right',max:1,ticks:{callback:v=>fmtP(v)},title:{display:true,text:'Discount %'},grid:{display:false}}, },
+        }, plugins:[ChartDataLabels],
       });
     }
 
-    // Chart 3: Sales (bars) + App Download % (line) + Tail Mail % (line)
+    // Chart 3: Sales (bars) + App Download % (green) + Tail Mail % (purple)
     const c3 = `cRT_${chartIdx++}`;
     destroyChart(c3);
     const ctx3 = document.getElementById(c3);
     if(ctx3) {
       STATE.charts[c3] = new Chart(ctx3, {
         type:'bar',
-        data:{ labels:activeLabels, datasets:[
-          { label:'Sales', data:activeLabels.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
-          { label:'App Download %', data:activeLabels.map(l=>avg(grpByWeek[l]||[],'🔴 App Download %')), type:'line', borderColor:'#27AE60', backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:'#27AE60', tension:.3, yAxisID:'y1' },
-          { label:'Tail Mail %', data:activeLabels.map(l=>avg(grpByWeek[l]||[],'🔴 Tail Mail %')), type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1' },
+        data:{ labels:last8, datasets:[
+          { label:'Sales', data:last8.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'App Download %', data:last8.map(l=>avg(grpByWeek[l]||[],'🔴 App Download %')), type:'line', borderColor:'#27AE60', backgroundColor:'transparent', borderWidth:3, pointRadius:5, pointBackgroundColor:'#27AE60', tension:.3, yAxisID:'y1' },
+          { label:'Tail Mail %', data:last8.map(l=>avg(grpByWeek[l]||[],'🔴 Tail Mail %')), type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:5, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1' },
         ]},
         options:{
-          responsive:true, maintainAspectRatio:false,
-          layout:{ padding:{ top:30 } },
-          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
-            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
-              formatter:function(v,c){return c.datasetIndex===0?fmt(v):fmtP(v)}, anchor:'end', align:'top' },
-          },
-          scales:{
-            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
-            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Sales'}, grid:{color:'rgba(0,0,0,.04)'} },
-            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'%'}, grid:{display:false} },
-          },
-        },
-        plugins:[ChartDataLabels],
+          responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+          plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+            datalabels:{display:true,font:{size:11,weight:'700'},color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex===0?fmt(v):fmtP(v)},anchor:'end',align:'top'}, },
+          scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,position:'left',title:{display:true,text:'Sales'},grid:{color:'rgba(0,0,0,.04)'}},
+            y1:{beginAtZero:true,position:'right',max:1,ticks:{callback:v=>fmtP(v)},title:{display:true,text:'%'},grid:{display:false}}, },
+        }, plugins:[ChartDataLabels],
       });
     }
   }
