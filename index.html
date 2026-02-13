@@ -815,7 +815,6 @@ function renderSales() {
   }
 
   // Period detail table
-  const view = document.getElementById('selView').value;
   let h=`<thead><tr><th>${view==='week'?'Week':'Period'}</th><th>🔵🐶 Sales</th><th>🔴🐶 Actual</th><th>🐶 Var%</th><th>🔵🐱 Sales</th><th>🔴🐱 Actual</th><th>🐱 Var%</th><th>🔴🐶 CPA</th><th>🔴🐱 CPA</th></tr></thead><tbody>`;
   for(const t of labels) {
     const r=byTime[t]||[];
