@@ -171,6 +171,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
   <button class="tab-btn active" onclick="setTab('summary',this)">📊 Summary</button>
   <button class="tab-btn" onclick="setTab('sales',this)">📈 Sales & CPA</button>
   <button class="tab-btn" onclick="setTab('regions',this)">🗺️ Regional</button>
+  <button class="tab-btn" onclick="setTab('retention',this)">📦 Retention</button>
   <button class="tab-btn" onclick="setTab('team',this)">👥 Team & Staffing</button>
 </div>
 
@@ -218,6 +219,13 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <div id="regionGroupSections"></div>
   </div>
 
+  <!-- TAB: RETENTION -->
+  <div id="tab-retention" class="tab-page">
+    <div class="section-hdr"><h2>Retention, Discounts & Engagement</h2><div class="line"></div></div>
+    <div class="kpi-row" id="retentionKPIs"></div>
+    <div id="retentionCharts"></div>
+  </div>
+
   <!-- TAB: TEAM -->
   <div id="tab-team" class="tab-page">
     <div class="section-hdr"><h2>Team Size & Staffing</h2><div class="line"></div></div>
@@ -263,6 +271,9 @@ async function fetchRecords(token, year) {
     '🔴 Shifts','🟡 Shifts','🔴 Shift Capacity','🔴 Staffing Performance','🔴 Rep Shifts Required',
     '🐶 Sales Var vs Budget','🐶 Sales Var % vs Budget','🐱 Sales Var vs Budget','🐱 Sales Var % vs Budget',
     '🐶 Spend Var vs Budget','🐱 Spend Var vs Budget',
+    '🔴🐶 Box 2 Retention','🔴🐱 Box 2 Retention','🔴🐶 Box 1 Count','🔴🐱 Box 1 Count',
+    '🔴🐶 Box 1 Average Discount','🔴🐱 Box 1 Average Discount',
+    '🔴 App Download %','🔴 Tail Mail %','✅ 28 day retention week Tick',
   ];
   const headers = { Authorization: `Bearer ${token}` };
   let all = [], offset = null;
@@ -490,11 +501,17 @@ function renderSummary() {
   const spVar = spendB>0?(spendA-spendB)/spendB:null;
   const cpaVar = cpaB>0?(cpaA-cpaB)/cpaB:null;
 
+  // Dynamic scope label
+  const pSel = document.getElementById('selPeriod').value;
+  const wSel = document.getElementById('selWeek').value;
+  const rngSel = document.getElementById('selRange').value;
+  const scope = pSel !== 'all' ? pSel : wSel !== 'all' ? wSel : rngSel === 'ytd' ? 'YTD' : rngSel === 'full' ? 'Full Year' : rngSel;
+
   document.getElementById('summaryKPIs').innerHTML =
-    kpi('Sales',fmt(salesA),'🔵 Budget',fmt(salesB),acqVar,'📈',col.act) +
-    kpi('Spend',fmtC(spendA),'🔵 Budget',fmtC(spendB),spVar,'💰',col.bud,true) +
-    kpi('CPA',fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaVar,'🎯',col.fcst,true) +
-    kpi('SPS',spsA.toFixed(1),'🔵 Budget',spsB.toFixed(1),spsB>0?(spsA-spsB)/spsB:null,'⚡',col.act);
+    kpi(`🔴 Sales (${scope})`,fmt(salesA),'🔵 Budget',fmt(salesB),acqVar,'📈',col.act) +
+    kpi(`🔴 Spend (${scope})`,fmtC(spendA),'🔵 Budget',fmtC(spendB),spVar,'💰',col.bud,true) +
+    kpi(`🔴 CPA (${scope})`,fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaVar,'🎯',col.fcst,true) +
+    kpi(`🔴 SPS (${scope})`,spsA.toFixed(1),'🔵 Budget',spsB.toFixed(1),spsB>0?(spsA-spsB)/spsB:null,'⚡',col.act);
 
   // Sales by time axis
   makeBarChart('cSalesPeriod', labels, [
@@ -624,10 +641,15 @@ function renderSales() {
   // Overall KPIs
   const salesA=bSales(recs,'🔴'), salesB=bSales(recs,'🔵'), spendA=bSpend(recs,'🔴'), spendB=bSpend(recs,'🔵');
   const cpaA=salesA>0?spendA/salesA:0, cpaB=salesB>0?spendB/salesB:0;
+  const pS = document.getElementById('selPeriod').value;
+  const wS = document.getElementById('selWeek').value;
+  const rS = document.getElementById('selRange').value;
+  const scp = pS !== 'all' ? pS : wS !== 'all' ? wS : rS === 'ytd' ? 'YTD' : rS === 'full' ? 'Full Year' : rS;
+
   document.getElementById('salesKPIs').innerHTML =
-    kpi('Sales',fmt(salesA),'🔵 Budget',fmt(salesB),salesB>0?(salesA-salesB)/salesB:null,'📈',col.act) +
-    kpi('CPA',fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaB>0?(cpaA-cpaB)/cpaB:null,'🎯',col.bud,true) +
-    kpi('Spend',fmtC(spendA),'🔵 Budget',fmtC(spendB),spendB>0?(spendA-spendB)/spendB:null,'💰',col.fcst,true);
+    kpi(`🔴 Sales (${scp})`,fmt(salesA),'🔵 Budget',fmt(salesB),salesB>0?(salesA-salesB)/salesB:null,'📈',col.act) +
+    kpi(`🔴 CPA (${scp})`,fmtCPA(cpaA),'🔵 Budget',fmtCPA(cpaB),cpaB>0?(cpaA-cpaB)/cpaB:null,'🎯',col.bud,true) +
+    kpi(`🔴 Spend (${scp})`,fmtC(spendA),'🔵 Budget',fmtC(spendB),spendB>0?(spendA-spendB)/spendB:null,'💰',col.fcst,true);
 
   // Build HTML for region group sections
   let html = '';
@@ -801,10 +823,16 @@ function renderRegions() {
   const salesB = bSales(allRegRecs,'🔵'), salesF = bSales(allRegRecs,'🟡'), salesA = bSales(actualRecs,'🔴');
   const spendB = bSpend(allRegRecs,'🔵'), spendA = bSpend(actualRecs,'🔴');
   const cpaB = salesB>0?spendB/salesB:0, cpaA = salesA>0?spendA/salesA:0;
+  // Dynamic labels based on active filters
+  const periodSel = document.getElementById('selPeriod').value;
+  const weekSel = document.getElementById('selWeek').value;
+  const rangeSel = document.getElementById('selRange').value;
+  const scope = periodSel !== 'all' ? periodSel : weekSel !== 'all' ? weekSel : rangeSel === 'ytd' ? 'YTD' : rangeSel === 'full' ? 'Full Year' : rangeSel;
+
   document.getElementById('regionOverallKPIs').innerHTML =
-    kpi('🔵 Budget Sales',fmt(salesB),'Full Year','',null,'📊',col.bud) +
-    kpi('🟡 Forecast Sales',fmt(salesF),'Full Year','',salesB>0?(salesF-salesB)/salesB:null,'🔮',col.fcst) +
-    kpi('🔴 Actual Sales (YTD)',fmt(salesA),'vs Budget',fmt(salesB),salesB>0?(salesA-salesB)/salesB:null,'📈',col.act) +
+    kpi(`🔵 Budget Sales (${scope})`,fmt(salesB),scope,'',null,'📊',col.bud) +
+    kpi(`🟡 Forecast Sales (${scope})`,fmt(salesF),scope,'',salesB>0?(salesF-salesB)/salesB:null,'🔮',col.fcst) +
+    kpi(`🔴 Actual Sales (${scope})`,fmt(salesA),'vs Budget',fmt(salesB),salesB>0?(salesA-salesB)/salesB:null,'📈',col.act) +
     kpi('🔴 Actual CPA',fmtCPA(cpaA),'🔵 Budget CPA',fmtCPA(cpaB),cpaB>0?(cpaA-cpaB)/cpaB:null,'🎯',col.bud,true);
 
   // Build per-region-group sections
@@ -896,6 +924,212 @@ function renderRegions() {
             datalabels:{ display:true, anchor:'end', align:'top', font:{size:13,weight:'700'}, color:function(c){return c.dataset.borderColor||'#555'}, formatter:v=>v>0?fmtCPA(v):'' },
           },
           scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,ticks:{callback:v=>fmtCPA(v)},grid:{color:'rgba(0,0,0,.04)'}} },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: RETENTION TAB
+// ═══════════════════════════════════════════════════════════════
+function renderRetention() {
+  // Combine 2025 + 2026 region-level records for retention (need history)
+  const all2025 = (STATE.records2025||[]).filter(r => gs(r,'⚙️ Level') === 'Region');
+  const all2026 = STATE.records.filter(r => gs(r,'⚙️ Level') === 'Region');
+  let allRecs = [...all2025, ...all2026];
+
+  // Filter to only ✅ (matured) and ⏳ (almost matured) retention records
+  allRecs = allRecs.filter(r => {
+    const tick = gs(r,'✅ 28 day retention week Tick');
+    return tick === '✅' || tick === '⏳';
+  });
+
+  // Apply region group + region filters (but NOT period/week/range — retention needs its own time window)
+  const rgSel = document.getElementById('selRegionGroup').value;
+  const regSel = document.getElementById('selRegion').value;
+  if (rgSel !== 'all') {
+    const regionsInGroup = REG_IN_GROUP[rgSel] || [];
+    allRecs = allRecs.filter(r => regionsInGroup.includes(gs(r,'⚙️ Region')) || gs(r,'⚙️ Region Group') === rgSel);
+  }
+  if (regSel !== 'all') allRecs = allRecs.filter(r => gs(r,'⚙️ Region') === regSel);
+
+  const col = C[STATE.brand];
+  const byRegion = groupBy(allRecs,'⚙️ Region');
+
+  // Brand-aware helpers for retention fields
+  function bRet(recs) {
+    const b = STATE.brand;
+    if(b==='butternut') return avg(recs,'🔴🐶 Box 2 Retention');
+    if(b==='marro') return avg(recs,'🔴🐱 Box 2 Retention');
+    return (avg(recs,'🔴🐶 Box 2 Retention') + avg(recs,'🔴🐱 Box 2 Retention')) / 2;
+  }
+  function bBox1(recs) {
+    const b = STATE.brand;
+    if(b==='butternut') return sum(recs,'🔴🐶 Box 1 Count');
+    if(b==='marro') return sum(recs,'🔴🐱 Box 1 Count');
+    return sum(recs,'🔴🐶 Box 1 Count') + sum(recs,'🔴🐱 Box 1 Count');
+  }
+  function bDisc(recs) {
+    const b = STATE.brand;
+    if(b==='butternut') return avg(recs,'🔴🐶 Box 1 Average Discount');
+    if(b==='marro') return avg(recs,'🔴🐱 Box 1 Average Discount');
+    return (avg(recs,'🔴🐶 Box 1 Average Discount') + avg(recs,'🔴🐱 Box 1 Average Discount')) / 2;
+  }
+
+  // Overall KPIs
+  const avgRet = bRet(allRecs), avgDisc = bDisc(allRecs);
+  const avgApp = avg(allRecs,'🔴 App Download %'), avgTM = avg(allRecs,'🔴 Tail Mail %');
+  document.getElementById('retentionKPIs').innerHTML =
+    kpi('Box 2 Retention',fmtP(avgRet),'28-day matured','',null,'📦',col.act) +
+    kpi('Avg Box 1 Discount',fmtP(avgDisc),'Weighted avg','',null,'🏷️',col.fcst) +
+    kpi('App Download %',fmtP(avgApp),'Average','',null,'📱',col.bud) +
+    kpi('Tail Mail %',fmtP(avgTM),'Average','',null,'📬','#27AE60');
+
+  // Time axis for retention — always by week, sorted across years
+  function weekSort(a,b) {
+    const ya=gs(a,'⚙️ Year'), yb=gs(b,'⚙️ Year');
+    if(ya!==yb) return ya<yb?-1:1;
+    return (W_ORD[gs(a,'⚙️ Week')]||0) - (W_ORD[gs(b,'⚙️ Week')]||0);
+  }
+  allRecs.sort(weekSort);
+  // Create combined week labels (e.g. "W48'25", "W1'26")
+  const weekLabels = [];
+  const weekGroups = {};
+  for (const r of allRecs) {
+    const yr = gs(r,'⚙️ Year'), wk = gs(r,'⚙️ Week');
+    const label = `${wk}'${String(yr).slice(-2)}`;
+    if (!weekGroups[label]) { weekGroups[label] = []; weekLabels.push(label); }
+    // Deduplicate labels
+    if (weekLabels[weekLabels.length-1] !== label && !weekLabels.includes(label)) weekLabels.push(label);
+    weekGroups[label].push(r);
+  }
+  // Deduplicate
+  const uniqueLabels = [...new Set(weekLabels)];
+
+  // Build per region group
+  let html = '';
+  let chartIdx = 0;
+
+  for (const grp of REG_GROUP_ORDER) {
+    const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
+    if (!regions.length) continue;
+
+    html += `<div class="section-hdr"><h2>${grp}</h2><div class="line"></div></div>`;
+
+    // KPIs per region
+    html += `<div class="kpi-row">`;
+    for (const reg of regions) {
+      const rr = byRegion[reg]||[];
+      html += `<div class="kpi" style="min-width:200px"><div class="stripe" style="background:${REG_COLOURS[reg]||col.act}"></div>
+        <div class="label">${REG_EMOJI[reg]||''} ${reg}</div>
+        <div style="font-size:18px;font-weight:800;margin-top:4px">${fmtP(bRet(rr))} ret</div>
+        <div style="font-size:11px;color:var(--text2)">Disc: ${fmtP(bDisc(rr))} | App: ${fmtP(avg(rr,'🔴 App Download %'))}</div>
+      </div>`;
+    }
+    html += `</div>`;
+
+    const c1=`cRT_${chartIdx++}`, c2=`cRT_${chartIdx++}`, c3=`cRT_${chartIdx++}`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Box 1 Count & Box 2 Retention</h3><div class="chart-wrap"><canvas id="${c1}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales & Avg Box 1 Discount</h3><div class="chart-wrap"><canvas id="${c2}"></canvas></div></div></div>`;
+    html += `<div class="chart-row"><div class="chart-card full"><h3>${grp} — Sales, App Download % & Tail Mail %</h3><div class="chart-wrap"><canvas id="${c3}"></canvas></div></div></div>`;
+  }
+  document.getElementById('retentionCharts').innerHTML = html;
+
+  // Render charts
+  chartIdx = 0;
+  for (const grp of REG_GROUP_ORDER) {
+    const regions = (REG_IN_GROUP[grp]||[]).filter(r => byRegion[r]);
+    if (!regions.length) continue;
+    const grpRecs = allRecs.filter(r => regions.includes(gs(r,'⚙️ Region')));
+    const grpByWeek = {};
+    for (const label of uniqueLabels) {
+      grpByWeek[label] = (weekGroups[label]||[]).filter(r => regions.includes(gs(r,'⚙️ Region')));
+    }
+    const activeLabels = uniqueLabels.filter(l => grpByWeek[l] && grpByWeek[l].length > 0);
+    const showLbl = activeLabels.length <= 15;
+
+    // Chart 1: Box 1 Count (bars) + Box 2 Retention (line)
+    const c1 = `cRT_${chartIdx++}`;
+    destroyChart(c1);
+    const ctx1 = document.getElementById(c1);
+    if(ctx1) {
+      STATE.charts[c1] = new Chart(ctx1, {
+        type:'bar',
+        data:{ labels:activeLabels, datasets:[
+          { label:'Box 1 Count', data:activeLabels.map(l=>bBox1(grpByWeek[l]||[])), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'Box 2 Retention', data:activeLabels.map(l=>bRet(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          layout:{ padding:{ top:30 } },
+          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
+            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex===1?fmtP(v):fmt(v)}, anchor:'end', align:'top' },
+          },
+          scales:{
+            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
+            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Box 1 Count'}, grid:{color:'rgba(0,0,0,.04)'} },
+            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'Retention %'}, grid:{display:false} },
+          },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
+
+    // Chart 2: Sales (bars) + Avg Box 1 Discount (line)
+    const c2 = `cRT_${chartIdx++}`;
+    destroyChart(c2);
+    const ctx2 = document.getElementById(c2);
+    if(ctx2) {
+      STATE.charts[c2] = new Chart(ctx2, {
+        type:'bar',
+        data:{ labels:activeLabels, datasets:[
+          { label:'Sales', data:activeLabels.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'Avg B1 Discount', data:activeLabels.map(l=>bDisc(grpByWeek[l]||[])), type:'line', borderColor:col.act, backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:col.act, tension:.3, yAxisID:'y1' },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          layout:{ padding:{ top:30 } },
+          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
+            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex===1?fmtP(v):fmt(v)}, anchor:'end', align:'top' },
+          },
+          scales:{
+            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
+            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Sales'}, grid:{color:'rgba(0,0,0,.04)'} },
+            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'Discount %'}, grid:{display:false} },
+          },
+        },
+        plugins:[ChartDataLabels],
+      });
+    }
+
+    // Chart 3: Sales (bars) + App Download % (line) + Tail Mail % (line)
+    const c3 = `cRT_${chartIdx++}`;
+    destroyChart(c3);
+    const ctx3 = document.getElementById(c3);
+    if(ctx3) {
+      STATE.charts[c3] = new Chart(ctx3, {
+        type:'bar',
+        data:{ labels:activeLabels, datasets:[
+          { label:'Sales', data:activeLabels.map(l=>bSales(grpByWeek[l]||[],'🔴')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:1, yAxisID:'y' },
+          { label:'App Download %', data:activeLabels.map(l=>avg(grpByWeek[l]||[],'🔴 App Download %')), type:'line', borderColor:'#27AE60', backgroundColor:'transparent', borderWidth:3, pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:'#27AE60', tension:.3, yAxisID:'y1' },
+          { label:'Tail Mail %', data:activeLabels.map(l=>avg(grpByWeek[l]||[],'🔴 Tail Mail %')), type:'line', borderColor:'#8E44AD', backgroundColor:'transparent', borderWidth:3, borderDash:[6,3], pointRadius:activeLabels.length>30?1:4, pointBackgroundColor:'#8E44AD', tension:.3, yAxisID:'y1' },
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          layout:{ padding:{ top:30 } },
+          plugins:{ legend:{ position:'bottom', labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}} },
+            datalabels:{ display:showLbl, font:{size:10,weight:'700'}, color:function(c){return c.dataset.borderColor||c.dataset.backgroundColor||'#555'},
+              formatter:function(v,c){return c.datasetIndex===0?fmt(v):fmtP(v)}, anchor:'end', align:'top' },
+          },
+          scales:{
+            x:{ grid:{display:false}, ticks:{font:{size:activeLabels.length>30?7:10}} },
+            y:{ beginAtZero:true, position:'left', title:{display:true,text:'Sales'}, grid:{color:'rgba(0,0,0,.04)'} },
+            y1:{ beginAtZero:true, position:'right', max:1, ticks:{callback:v=>fmtP(v)}, title:{display:true,text:'%'}, grid:{display:false} },
+          },
         },
         plugins:[ChartDataLabels],
       });
@@ -1058,6 +1292,7 @@ function render() {
   renderSummary();
   renderSales();
   renderRegions();
+  renderRetention();
   renderTeam();
 }
 
@@ -1124,9 +1359,13 @@ async function loadData() {
   document.getElementById('loadingEl').style.display='flex';
 
   try {
-    const year = '2026';
-    STATE.records = await fetchRecords(token, year);
-    console.log(`✅ Loaded ${STATE.records.length} records for ${year}`);
+    const [recs2026, recs2025] = await Promise.all([
+      fetchRecords(token, '2026'),
+      fetchRecords(token, '2025'),
+    ]);
+    STATE.records = recs2026;
+    STATE.records2025 = recs2025;
+    console.log(`✅ Loaded ${recs2026.length} records for 2026, ${recs2025.length} for 2025`);
     populateFilters(STATE.records);
     document.getElementById('loadingEl').style.display='none';
     render();
