@@ -162,6 +162,11 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
     <select id="selWeek" onchange="render()"><option value="all">All Weeks</option></select>
     <select id="selRegionGroup" onchange="render()"><option value="all">All Region Groups</option></select>
     <select id="selRegion" onchange="render()"><option value="all">All Regions</option></select>
+    <select id="selChannel" onchange="render()">
+      <option value="Face to Face" selected>Face to Face</option>
+      <option value="Telesales">Telesales</option>
+      <option value="all">All Channels</option>
+    </select>
     <button class="refresh-btn" onclick="loadData()" title="Refresh data">↻</button>
   </div>
 </div>
@@ -340,6 +345,10 @@ function applyGlobalFilters(recs) {
   // Region filter
   const regSel = document.getElementById('selRegion').value;
   if (regSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Region') === regSel);
+
+  // Channel filter
+  const chanSel = document.getElementById('selChannel').value;
+  if (chanSel !== 'all') recs = recs.filter(r => gs(r,'⚙️ Channel') === chanSel);
 
   return recs;
 }
