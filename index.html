@@ -196,6 +196,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
 
   <!-- TAB: SUMMARY -->
   <div id="tab-summary" class="tab-page active">
+    <div id="mktSummary_summary"></div>
     <div class="section-hdr"><h2 id="summaryTitle">YTD Performance</h2><div class="line"></div></div>
     <div class="kpi-row" id="summaryKPIs"></div>
     <div class="chart-row">
@@ -211,6 +212,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
 
   <!-- TAB: SALES & CPA (by Region Group, stacked by region, weekly) -->
   <div id="tab-sales" class="tab-page">
+    <div id="mktSummary_sales"></div>
     <div class="section-hdr"><h2>Sales & CPA by Region Group</h2><div class="line"></div></div>
     <div class="kpi-row" id="salesKPIs"></div>
     <div id="salesRegionCharts"></div>
@@ -219,6 +221,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
 
   <!-- TAB: REGIONAL (per region group, Budget vs Forecast vs Actual) -->
   <div id="tab-regions" class="tab-page">
+    <div id="mktSummary_regions"></div>
     <div class="section-hdr"><h2>Regional Summary</h2><div class="line"></div></div>
     <div class="kpi-row" id="regionOverallKPIs"></div>
     <div id="regionGroupSections"></div>
@@ -226,6 +229,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
 
   <!-- TAB: RETENTION -->
   <div id="tab-retention" class="tab-page">
+    <div id="mktSummary_retention"></div>
     <div class="section-hdr"><h2>Retention, Discounts & Engagement</h2><div class="line"></div></div>
     <div class="kpi-row" id="retentionKPIs"></div>
     <div id="retentionCharts"></div>
@@ -233,6 +237,7 @@ tbody tr:hover{background:rgba(0,0,0,.02)}
 
   <!-- TAB: TEAM -->
   <div id="tab-team" class="tab-page">
+    <div id="mktSummary_team"></div>
     <div class="section-hdr"><h2>Team Size & Staffing</h2><div class="line"></div></div>
     <div class="kpi-row" id="teamKPIs"></div>
     <div id="teamRegionCharts"></div>
@@ -1338,7 +1343,132 @@ function renderTeam() {
 // ═══════════════════════════════════════════════════════════════
 // RENDER ALL
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MARKET SUMMARY (reusable, rendered at top of every tab)
+// ═══════════════════════════════════════════════════════════════
+const MKT_LABELS = { UK:'GB', IE:'IE' };
+const RG_COLOURS_MKT = { SOUTH:'#10507C', NORTH:'#E74C3C', 'IE F2F Group':'#27AE60' };
+let mktChartIdx = 0;
+
+function renderMarketSummary(containerId) {
+  const recs = getFilteredRegionRecs();
+  const col = C[STATE.brand];
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Group by market
+  const byMarket = { UK: recs.filter(r=>gs(r,'⚙️ Market')==='UK'), IE: recs.filter(r=>gs(r,'⚙️ Market')==='IE') };
+  const markets = ['UK','IE'].filter(m => byMarket[m].length > 0);
+
+  // KPI cards per market
+  let html = '<div class="section-hdr"><h2>Market Summary</h2><div class="line"></div></div>';
+  html += '<div class="kpi-row">';
+  for (const mkt of markets) {
+    const mr = byMarket[mkt];
+    const s=bSales(mr,'🔴'), sb=bSales(mr,'🔵'), sp=bSpend(mr,'🔴'), spb=bSpend(mr,'🔵');
+    const cpa=s>0?sp/s:0, cpab=sb>0?spb/sb:0;
+    html += kpi(`${MKT_LABELS[mkt]} Sales`,fmt(s),'🔵 Budget',fmt(sb),sb>0?(s-sb)/sb:null,'📈',col.act);
+    html += kpi(`${MKT_LABELS[mkt]} CPA`,fmtCPA(cpa),'🔵 Budget',fmtCPA(cpab),cpab>0?(cpa-cpab)/cpab:null,'🎯',col.bud,true);
+    html += kpi(`${MKT_LABELS[mkt]} Spend`,fmtC(sp),'🔵 Budget',fmtC(spb),spb>0?(sp-spb)/spb:null,'💰',col.fcst,true);
+  }
+  html += '</div>';
+
+  // Charts: Sales, Spend, CPA — markets as X-axis, region groups as stacked actuals + budget bar
+  const cS=`cMkt_${mktChartIdx++}`, cSp=`cMkt_${mktChartIdx++}`, cC=`cMkt_${mktChartIdx++}`;
+  html += `<div class="chart-row">
+    <div class="chart-card full"><h3>Sales by Market (Region Groups Stacked)</h3><div class="chart-wrap"><canvas id="${cS}"></canvas></div></div>
+  </div>`;
+  html += `<div class="chart-row">
+    <div class="chart-card full"><h3>Spend by Market (Region Groups Stacked)</h3><div class="chart-wrap"><canvas id="${cSp}"></canvas></div></div>
+  </div>`;
+  html += `<div class="chart-row">
+    <div class="chart-card full"><h3>CPA by Market</h3><div class="chart-wrap"><canvas id="${cC}"></canvas></div></div>
+  </div>`;
+
+  container.innerHTML = html;
+
+  // Group recs by region group within each market
+  const activeRGs = REG_GROUP_ORDER.filter(rg => {
+    const regs = REG_IN_GROUP[rg]||[];
+    return recs.some(r => regs.includes(gs(r,'⚙️ Region')));
+  });
+
+  function rgRecsInMarket(mkt, rg) {
+    const regs = REG_IN_GROUP[rg]||[];
+    return byMarket[mkt].filter(r => regs.includes(gs(r,'⚙️ Region')));
+  }
+
+  // Sales chart: budget (single bar) + actuals stacked by region group
+  destroyChart(cS);
+  const ctx1 = document.getElementById(cS);
+  if (ctx1) {
+    STATE.charts[cS] = new Chart(ctx1, {
+      type:'bar',
+      data:{ labels: markets.map(m=>MKT_LABELS[m]), datasets:[
+        { label:'🔵 Budget', data:markets.map(m=>bSales(byMarket[m],'🔵')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:2, stack:'budget' },
+        ...activeRGs.map(rg => ({
+          label:`🔴 ${rg}`, data:markets.map(m=>bSales(rgRecsInMarket(m,rg),'🔴')),
+          backgroundColor:(RG_COLOURS_MKT[rg]||'#999')+'CC', borderColor:RG_COLOURS_MKT[rg]||'#999', borderWidth:1, stack:'actual',
+        })),
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+        plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+          datalabels:{display:true,anchor:'end',align:'top',font:{size:13,weight:'700'},color:function(c){return c.dataset.borderColor||'#555'},formatter:v=>v>0?fmt(v):''}, },
+        scales:{ x:{stacked:true,grid:{display:false}}, y:{stacked:true,beginAtZero:true,grid:{color:'rgba(0,0,0,.04)'}} },
+      }, plugins:[ChartDataLabels],
+    });
+  }
+
+  // Spend chart
+  destroyChart(cSp);
+  const ctx2 = document.getElementById(cSp);
+  if (ctx2) {
+    STATE.charts[cSp] = new Chart(ctx2, {
+      type:'bar',
+      data:{ labels: markets.map(m=>MKT_LABELS[m]), datasets:[
+        { label:'🔵 Budget', data:markets.map(m=>bSpend(byMarket[m],'🔵')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:2, stack:'budget' },
+        ...activeRGs.map(rg => ({
+          label:`🔴 ${rg}`, data:markets.map(m=>bSpend(rgRecsInMarket(m,rg),'🔴')),
+          backgroundColor:(RG_COLOURS_MKT[rg]||'#999')+'CC', borderColor:RG_COLOURS_MKT[rg]||'#999', borderWidth:1, stack:'actual',
+        })),
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+        plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+          datalabels:{display:true,anchor:'end',align:'top',font:{size:13,weight:'700'},color:function(c){return c.dataset.borderColor||'#555'},formatter:v=>v>0?fmtC(v):''}, },
+        scales:{ x:{stacked:true,grid:{display:false}}, y:{stacked:true,beginAtZero:true,ticks:{callback:v=>fmtC(v)},grid:{color:'rgba(0,0,0,.04)'}} },
+      }, plugins:[ChartDataLabels],
+    });
+  }
+
+  // CPA chart (not stacked — grouped bars per market)
+  destroyChart(cC);
+  const ctx3 = document.getElementById(cC);
+  if (ctx3) {
+    STATE.charts[cC] = new Chart(ctx3, {
+      type:'bar',
+      data:{ labels: markets.map(m=>MKT_LABELS[m]), datasets:[
+        { label:'🔵 Budget CPA', data:markets.map(m=>bCPA(byMarket[m],'🔵')), backgroundColor:col.bud+'88', borderColor:col.bud, borderWidth:2 },
+        { label:'🔴 Actual CPA', data:markets.map(m=>bCPA(byMarket[m],'🔴')), backgroundColor:col.act+'CC', borderColor:col.act, borderWidth:2 },
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false, layout:{padding:{top:30}},
+        plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,padding:14,font:{size:11,weight:'600'}}},
+          datalabels:{display:true,anchor:'end',align:'top',font:{size:13,weight:'700'},color:function(c){return c.dataset.borderColor||'#555'},formatter:v=>v>0?fmtCPA(v):''}, },
+        scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,ticks:{callback:v=>fmtCPA(v)},grid:{color:'rgba(0,0,0,.04)'}} },
+      }, plugins:[ChartDataLabels],
+    });
+  }
+}
+
 function render() {
+  mktChartIdx = 0;
+  renderMarketSummary('mktSummary_summary');
+  renderMarketSummary('mktSummary_sales');
+  renderMarketSummary('mktSummary_regions');
+  renderMarketSummary('mktSummary_retention');
+  renderMarketSummary('mktSummary_team');
   renderSummary();
   renderSales();
   renderRegions();
